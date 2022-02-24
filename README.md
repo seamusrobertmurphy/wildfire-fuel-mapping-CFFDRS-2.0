@@ -1,1 +1,1 @@
-# Wildfire-Mapping-CFFDRS-2.0
+# Wildfire-Mapping-CFFDRS-2.0 Prototype
