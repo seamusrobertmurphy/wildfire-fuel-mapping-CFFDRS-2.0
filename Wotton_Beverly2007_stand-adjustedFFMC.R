@@ -1,6 +1,7 @@
 
 
-# Cite as: Wotton, B. M., & Beverly, J. L. (2007). Stand-specific litter moisture content calibrations for the Canadian Fine Fuel Moisture Code. International Journal of Wildland Fire, 16(4), 463-472.
+# Cite as: Wotton, B. M., & Beverly, J. L. (2007). Stand-specific litter moisture content calibrations 
+# for the Canadian Fine Fuel Moisture Code. International Journal of Wildland Fire, 16(4), 463-472.
 
 #base R - no packages required
 
