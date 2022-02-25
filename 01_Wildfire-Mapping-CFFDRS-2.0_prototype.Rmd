@@ -3,11 +3,12 @@ title: "Prototype - Fuel Mapping for CFFDRSv2.0"
 author: "SRM-LQ"
 date: "24/02/2022"
 output: 
-  html_document:
+  pdf_document:
     toc: TRUE
     toc_depth: 5
     number_sections: TRUE
     df_print: tibble
+    latex_engine: xelatex
   zotero: TRUE
 
 bibliography: references.bib
@@ -27,12 +28,17 @@ library(raster)
 library(webdriver)
 library(webshot)
 library(webshot2)
-library(sf)
-library(sp)
-library(terra)
-library(conflicted)
 library(RColorBrewer)
+library(conflicted)
+library(readr)
+library(tibble)
+library(sf)
+library(dplyr)
+library(raster)
+library(terra)
+library(rgdal)
 library(cffdrs)
+library(ncdf4)
 #webshot::install_phantomjs(force = TRUE)
 knit_hooks$set(webgl = hook_webgl)
 knit_hooks$set(rgl.static = hook_rgl)
@@ -46,8 +52,130 @@ Natural Resources Canada is seeking the development of a software solution for t
 
 -   NRC Grant Information available here <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
-Lots of great tools have already been developed in the new [cffddrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) built specifically for developing the main components of the Canadian Forest Fire Danger Rating System: Fire Weather Index and Fire Prediction Behaviour. This includes package tools to develop the three classes of forest fuels and their climatically situated moisture content: Fine Fuel Moisture Code, Duff Moisture Code, Drought Code. FFMC and DMC are two key variables of five predictors that are used in Wotton and Beverly's stand-adjusted CFFDRS model. Not 1005 sure, but I suspect this informs the gold standard for fuel typing mapping and data requirements that NRC are looking for in grant-winning proposals. For instance, the package manual explains that the 'FWI System outputs are determined from daily noon weather observations: temperature, relative humidity, wind speed, and 24-hour rainfall' which already gives an idea of what inputs to design the model with.
+Lots of great tools have already been developed in the new [cffddrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) built specifically for developing the two main components of the Canadian Forest Fire Danger Rating System: Fire Weather Index and Fire Prediction Behaviour, which include variables for forest fuels classes and their climatically situated moisture content in coded index: Fine Fuel Moisture Code (FFMC), Duff Moisture Code (DMC), Drought Code (DC). The first two FFMC and DMC are essential to the Wotton and Beverly's stand-adjusted CFFDRS model. We need to check up on this, but this model may be what the NRC are looking for in applications for this grant competition, considering what we're finding in their personal and official online repos.
 
-A quick and data-light prototype pipeline to produce these two variables was tested and documented below. This pipeline attempts to produce these two moisture codes in raster format using the fwiRaster function. All resources and package lists were also stored in a github repository, along with its virtual environment settings ready for cloning here: <https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>
+Some good info therein mentions that the 'FWI System outputs are determined from daily noon weather observations: temperature, relative humidity, wind speed, and 24-hour rainfall'. There is also a FWI test dataset 'test_fwi' showing what the proposed software should be able to source, process, and package as per contract deliverables:
 
-# Inputs
+```{r}
+library(cffdrs)
+print(as_tibble(test_fwi), n = 10)
+```
+
+A quick and rashy prototype pipeline to produce these two variables was tested below. This pipeline attempted to produce two moisture codes in raster format using the fwiRaster function. All resources and package lists were also stored in a github repository, along with its virtual environment settings ready for cloning here: <https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>. We tried to pay most attention to data inputs, sources and processing of inputting as it seems NRC are more keen on these mechanics than the actual modelling which is seemingly already well versed.
+
+# Import
+
+```{r}
+temp = raster("./Data/temp.nc")
+prec = raster("./Data/prec.nc")
+rh = raster("./Data/rh.nc")
+ws = raster("./Data/ws.nc")
+
+names(temp) = 'temp'
+names(prec) = 'prec'
+names(rh) = 'rh'
+names(ws) = 'ws'
+
+par(mfrow = c(2, 2)) 
+plot(temp)
+plot(prec)
+plot(rh)
+plot(ws)
+```
+
+Interpolated climate predictors were assembled as a raster stack to fit the fwiRaster function. No parameters were set, such as options for tuning moisture codes according to ground plot estimates. All outputs were selected to produce multi-layered raster that includes the original inputs (temp, rh, ws, prec), as well as the three target FWI variables needed for vegetation mapping: Fine Fuel Moisture Code (FFMC), Duff Moisture Code (DMC), Drought Code (DC).
+
+```{r}
+stack = stack(temp, rh, ws, prec)
+fwi_outputs = fwiRaster(stack, out = "all")
+plot(fwi_outputs)
+ffmc = raster(fwi_outputs, layer=5)
+dmc = raster(fwi_outputs, layer=6)
+dc = raster(fwi_outputs, layer=7)
+isi = raster(fwi_outputs, layer=8)
+bui = raster(fwi_outputs, layer=9)
+fwi = raster(fwi_outputs, layer=10)
+```
+
+For this quick and rough draft, we used the VRI 2020 data to derive all input variables, including stand characteristics needed below to feed the fuel type MCM classification as well as the stand-adjusted cffdrs model. The fuel type classification checklist seems more on point with what the grant is asking regarding vegetation mapping, but there are so many references made in the literature/online to the Wotton and Beverly model as the main contributor to CFFDRSv1.0 moving to v2.0 that it seems to important to ignore.
+
+Using sf, raster and terra packages, we read in the shapefile.shp, which we manually downloaded from imapBC, as a simple feature and filtered according to the criteria (fields) hierarchy published in the FLNRO fuel type VRI-layer description (Perrakis, 2015). If possible, it would be worth scoping out if VRI data sources meets the data standards for this grant or if NRC are expecting the platform to require LiDAR and spectral data. I see there are two levels of deliverables of functionalities described in the call, 1) 48hr quick rough-and-ready fuel map, 2) and 1-month map output that likely involves more accuracy assessment and model diagnostics.
+
+# Stand-Adjusted Fuel Typing [(Wooton & Beverly, 2007)](https://www.publish.csiro.au/wf/WF06087)
+
+For the Wotton and Beverly stand-adjusted cffdrs model, the required predictors in the VRI data include stand type (lead species) and stand density (stems/ha).
+
+```{r}
+watershed_bdrys = read_sf("./Data/BCGW_7113060B_1645786298548_3276/LWADM_WATMGMT_PREC_AREA_SVW/LWADM_PA_polygon.shp")
+peachland = watershed_bdrys[watershed_bdrys$PRECNC_NAM == "Peachland", ]
+
+vri_sf = read_sf("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
+vri_sf = st_intersection(st_make_valid(vri_sf), peachland)
+
+stand = vri_sf["SPEC_CD_1"]
+stand = rename(stand, stand = SPEC_CD_1)
+stand = stand["stand"]
+plot(stand$geometry)
+
+density = vri_sf["LIVE_STEMS"]
+density = rename(density, density = LIVE_STEMS)
+density = density["density"]
+
+plot(st_geometry(peachland))
+plot(st_geometry(stand))
+plot(st_geometry(vri_sf)
+#plot(peachland$geometry)
+#plot(stand$stand, add = TRUE)
+#plot(density$density, add = TRUE)
+
+spring = 1
+spring.summer = 2
+summer = 3
+fall = 4
+```
+
+*TODO: Finish dataframe pipeline below for less buggy inputs with shiny app deploys.*
+
+The following includes data processing functions for potential inputs as dataframe objects also possible as inputs in the cffdrs package.
+
+```{r}
+climate_vars = read.csv("./Data/power_nasa_kelowna.csv")
+climate_vars_sf = st_as_sf(climate_vars, coords = c("LAT", "LON"), crs = 4326)
+raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=20, crs = "EPSG:3153")
+temp = climate_vars_sf["T2M"]
+temp = dplyr::rename(temp, temp = T2M)
+temp = rasterize(temp, raster_template, res=20)
+rh = climate_vars_sf["RH2M"]
+rh = dplyr::rename(rh, rh = RH2M)
+rh = rasterize(rh, raster_template, res=20)
+ws = climate_vars_sf["WS10M"]
+ws = dplyr::rename(ws, ws = WS10M)
+ws = rasterize(ws, raster_template, res=20)
+prec = climate_vars_sf["PRECTOTCORR"]
+prec = dplyr::rename(prec, prec = PRECTOTCORR)
+prec = rasterize(prec, raster_template, res=20)
+stack = stack(temp, rh, ws, prec)
+fwi_outputs_dfpipe = fwiRaster(stack)
+```
+
+# BCWildFire Fuel Typing VRI-Layered Model 
+
+Adopting 2015 FLNRO VRI-screening framework (@perrakis2018british) vegetation polygons were classified as one the 17 fuel types cited in the Canadian Standard FBP Fuels Types (@hirsch1996canadian). The FLNRO screening framework provides a fully developed hierarchy of criteria, which allows simple filtering or subsetting of 'simpleFeature' datasets. TODO: draft 'spatialPolygonDataFrame' pipeline for any potential future software compatibility issues.
+
+```{r}
+fields::stats(vri_sf$HRVSTDT)
+
+fields::stats(vri_sf$BEC_ZONE)
+
+fuel_type_L1 = dplyr::filter(vri_sf, HRVSTDT == NA | HRVSTDT < 2016)
+
+vri_harvest = vri_sf["HRVSTDT"]
+wildfire_sf = wildfire_sf["FIRE_YEAR"]
+wildfire_aoi = wildfire_sf$FIRE_YEAR > 2000
+wildfire_aoi = st_intersection(st_make_valid(wildfire_sf), aoi_sf)
+vri_species_aoi = st_intersection(st_make_valid(vri_species), aoi_sf)
+vri_species_aoi$SPEC_CD_1 = as.factor(vri_species_aoi$SPEC_CD_1)
+vri_species_aoi =  dplyr::filter(vri_species_aoi, SPEC_CD_1 == "PL" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SE" | 
+
+
+```
