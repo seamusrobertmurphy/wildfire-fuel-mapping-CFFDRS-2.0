@@ -48,7 +48,7 @@ set.seed(23)
 
 ## Action {.unnumbered}
 
-Natural Resources Canada is seeking the development of a software solution for the creation of high-resolution vegetation mapping data of up to 1m resolution in wildland urban interface areas and wildland areas near communities to enable detailed fire behaviour prediction, fire hazard assessement and fire hazard mitigation activity planning.
+Natural Resources Canada call for proposals to develop software capable of producing high-resolution vegetation mapping for purpose of fuel typing, i.e. raster inputs fpr the next-gen CFFDRSv2.0.
 
 -   NRC Grant Information available here <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
@@ -66,10 +66,10 @@ A quick and rashy prototype pipeline to produce these two variables was tested b
 # Import
 
 ```{r}
-temp = raster("./Data/temp.nc")
-prec = raster("./Data/prec.nc")
-rh = raster("./Data/rh.nc")
-ws = raster("./Data/ws.nc")
+temp = raster::raster("./Data/temp.nc")
+prec = raster::raster("./Data/prec.nc")
+rh = raster::raster("./Data/rh.nc")
+ws = raster::raster("./Data/ws.nc")
 
 names(temp) = 'temp'
 names(prec) = 'prec'
@@ -108,22 +108,31 @@ For the Wotton and Beverly stand-adjusted cffdrs model, the required predictors 
 ```{r}
 watershed_bdrys = read_sf("./Data/BCGW_7113060B_1645786298548_3276/LWADM_WATMGMT_PREC_AREA_SVW/LWADM_PA_polygon.shp")
 peachland = watershed_bdrys[watershed_bdrys$PRECNC_NAM == "Peachland", ]
-
 vri_sf = read_sf("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
 vri_sf = st_intersection(st_make_valid(vri_sf), peachland)
-
-stand = vri_sf["SPEC_CD_1"]
+stand = vri_sf["SPEC_CD_1"] %>%
+  mutate()
 stand = rename(stand, stand = SPEC_CD_1)
-stand = stand["stand"]
-plot(stand$geometry)
-
 density = vri_sf["LIVE_STEMS"]
 density = rename(density, density = LIVE_STEMS)
+
+as.factor(stand$stand)
+summary.factor(stand$stand)
+class(stand$stand)
+nc <- st_read(system.file("gpkg/nc.gpkg", package="sf"), quiet = TRUE) %>% 
+  select(AREA, PERIMETER) %>% 
+  mutate(AREA = as.factor(AREA<median(AREA)))
+
+species_palette = "R3"
+peachland_plot = plot(st_geometry(stand), col = sf.colors(12, categorical = TRUE), border = 'grey', axes = TRUE) 
+legend("topright", legend=stand, fill=species_palette)
+
+
 density = density["density"]
 
 plot(st_geometry(peachland))
 plot(st_geometry(stand))
-plot(st_geometry(vri_sf)
+plot(st_geometry(vri_sf))
 #plot(peachland$geometry)
 #plot(stand$stand, add = TRUE)
 #plot(density$density, add = TRUE)
