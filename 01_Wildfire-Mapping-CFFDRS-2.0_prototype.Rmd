@@ -1,0 +1,53 @@
+---
+title: "Prototype - Fuel Mapping for CFFDRSv2.0"
+author: "SRM-LQ"
+date: "24/02/2022"
+output: 
+  html_document:
+    toc: TRUE
+    toc_depth: 5
+    number_sections: TRUE
+    df_print: tibble
+  zotero: TRUE
+
+bibliography: references.bib
+---
+
+```{r setup, echo=FALSE, message=FALSE,warning=FALSE, error=FALSE}
+library(lidR)
+library(mapview)
+library(rgl)
+library(pandocfilters)
+library(rmarkdown)
+library(formatR)
+library(gitignore)
+library(tinytex)
+library(knitr)
+library(raster)
+library(webdriver)
+library(webshot)
+library(webshot2)
+library(sf)
+library(sp)
+library(terra)
+library(conflicted)
+library(RColorBrewer)
+library(cffdrs)
+#webshot::install_phantomjs(force = TRUE)
+knit_hooks$set(webgl = hook_webgl)
+knit_hooks$set(rgl.static = hook_rgl)
+knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message = FALSE)
+set.seed(23)
+```
+
+## Action {.unnumbered}
+
+Natural Resources Canada is seeking the development of a software solution for the creation of high-resolution vegetation mapping data of up to 1m resolution in wildland urban interface areas and wildland areas near communities to enable detailed fire behaviour prediction, fire hazard assessement and fire hazard mitigation activity planning.
+
+-   NRC Grant Information available here <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
+
+Lots of great tools have already been developed in the new [cffddrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) built specifically for developing the main components of the Canadian Forest Fire Danger Rating System: Fire Weather Index and Fire Prediction Behaviour. This includes package tools to develop the three classes of forest fuels and their climatically situated moisture content: Fine Fuel Moisture Code, Duff Moisture Code, Drought Code. FFMC and DMC are two key variables of five predictors that are used in Wotton and Beverly's stand-adjusted CFFDRS model. Not 1005 sure, but I suspect this informs the gold standard for fuel typing mapping and data requirements that NRC are looking for in grant-winning proposals. For instance, the package manual explains that the 'FWI System outputs are determined from daily noon weather observations: temperature, relative humidity, wind speed, and 24-hour rainfall' which already gives an idea of what inputs to design the model with.
+
+A quick and data-light prototype pipeline to produce these two variables was tested and documented below. This pipeline attempts to produce these two moisture codes in raster format using the fwiRaster function. All resources and package lists were also stored in a github repository, along with its virtual environment settings ready for cloning here: <https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>
+
+# Inputs
