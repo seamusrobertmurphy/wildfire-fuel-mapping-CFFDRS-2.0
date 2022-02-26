@@ -11,10 +11,9 @@ CabinGIS
 
 ## Action
 
-Running with some of the momentum from meeting 24th Feb, the following
-was drafted as a quick and dirty pipeline prototype to produce two
-mapping deliverables described in the NRC grant “High-Resolution
-Mapping”:
+Building on the momentum of our last meeting, the following pipeline was
+drafted to produce two mapping outputs similar to those described as
+deliverables in the NRC grant “High-Resolution Mapping”:
 
 -   NRC Grant: <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
@@ -27,11 +26,11 @@ Prediction Behaviour Model. These include algorithms to measure three
 forest fuels classes and their moisture content indices: Fine Fuel
 Moisture Code (FFMC), Duff Moisture Code (DMC), Drought Code (DC). FFMC
 and DMC make up two of the five predictors needed to run the Wotton and
-Beverly’s stand-adjusted fuel-typing model (Wotton and Beverly (2007)).
-Need a second opinion here as it doesn’t seem 100% clear if NRC are
-interested in vegetation mapping outputs that are focused solely on fuel
-typing without the moisture codes and climate variables, or they want
-something that includes the FFMC and DMC.
+Beverly’s stand-adjusted fuel-typing model (@wotton2007stand). Need a
+second opinion here as it doesn’t seem 100% clear if NRC are interested
+in vegetation mapping outputs that are focused solely on fuel typing
+without the moisture codes and climate variables, or they want something
+that includes the FFMC and DMC.
 
 If its the former, there is some useful info found in the cffdrs package
 that describe the data requirements of the FWI System There is also a
@@ -64,26 +63,26 @@ print(as_tibble(test_fwi), n = 10)
 However, if its the second, and they are wanting a deliverable that is
 purely fuel-type focused, it may be worth having at look at and
 following closely the ‘FLNRO 2015 BC Fuel-Typing and VRI-Layering
-Framework’ (Perrakis, Eade, and Hicks (2018)). In it, they’ve developed
-an Arc-Python based algorithm that filters the VRI dataset using a kind
-of multi-criteria classification key to delineate landscapes into
-polygons according to the 16 Canadian Standard Fuel Type classes (Hirsch
-(1996)). In the final section below, we made a rough attempt of fitting
-this algorithm and coding the 100-plus VRI-criteria-layers (only got to
-23) to generate similar fuel-type rasters. This report, its scripts and
-its virtual environment are stored in the github repo here:
+Framework’ (@perrakis2018british). In it, they’ve developed an
+Arc-Python based algorithm that filters the VRI dataset using a kind of
+multi-criteria classification key to delineate landscapes into polygons
+according to the 16 Canadian Standard Fuel Type classes
+(@hirsch1996canadian). In the final section below, we made a rough
+attempt of fitting this algorithm and coding the 100-plus
+VRI-criteria-layers (only got to 23) to generate similar fuel-type
+rasters. This report, its scripts and its virtual environment are stored
+in the github repo here:
 <https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>.
 
 # 1 Stand-Adjusted CFFDRS Fuel Typing Model
 
 Five spatial predictor variables are needed to fit the Wotton and
-Beverly stand-adjusted fuel typing model (Wotton and Beverly (2007)) :
-“FFMC, DMC, stand (1:5; deciduous, Douglas-fir, mixedwood, pine,
-spruce), density (1:3; light, mod, dense), season (1, 1.5, 2, 3; spring,
-spr-sum transition, sum, fall). Two of these predictors, including
-density and stand were extracted from VRI-layers as simpleFeatures
-objects and then rasterized and stacked using the terra and raster
-packages.
+Beverly stand-adjusted fuel typing model (@wotton2007stand) : “FFMC,
+DMC, stand (1:5; deciduous, Douglas-fir, mixedwood, pine, spruce),
+density (1:3; light, mod, dense), season (1, 1.5, 2, 3; spring, spr-sum
+transition, sum, fall). Two of these predictors, including density and
+stand were extracted from VRI-layers as simpleFeatures objects and then
+rasterized and stacked using the terra and raster packages.
 
 ``` r
 library(ggplot2)
@@ -235,30 +234,3 @@ prec = rasterize(prec, raster_template, res=20)
 stack = stack(temp, rh, ws, prec)
 fwi_outputs_dfpipe = fwiRaster(stack)
 ```
-
-<div id="refs" class="references csl-bib-body hanging-indent">
-
-<div id="ref-hirsch1996canadian" class="csl-entry">
-
-Hirsch, Kelvin G. 1996. *Canadian Forest Fire Behavior Prediction (FBP)
-System: User’s Guide*. Vol. 7.
-
-</div>
-
-<div id="ref-perrakis2018british" class="csl-entry">
-
-Perrakis, Daniel DB, George Eade, and Dana Hicks. 2018. *British
-Columbia Wildfire Fuel Typing and Fuel Type Layer Description*. Canadian
-Forest Service, Natural Resources Canada.
-
-</div>
-
-<div id="ref-wotton2007stand" class="csl-entry">
-
-Wotton, B Mike, and Jennifer L Beverly. 2007. “Stand-Specific Litter
-Moisture Content Calibrations for the Canadian Fine Fuel Moisture Code.”
-*International Journal of Wildland Fire* 16 (4): 463–72.
-
-</div>
-
-</div>
