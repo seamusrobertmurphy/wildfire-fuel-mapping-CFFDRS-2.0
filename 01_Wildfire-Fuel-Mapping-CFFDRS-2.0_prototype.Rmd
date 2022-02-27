@@ -9,9 +9,9 @@ output:
     toc_depth: 5
     number_sections: TRUE
     df_print: tibble
+    citation_package: natbib
     latex_engine: xelatex
   zotero: TRUE
-
 bibliography: references.bib
 ---
 
@@ -40,6 +40,8 @@ library(terra)
 library(rgdal)
 library(cffdrs)
 library(ncdf4)
+library(elevatr)
+library(ggplot2)
 #webshot::install_phantomjs(force = TRUE)
 knit_hooks$set(webgl = hook_webgl)
 knit_hooks$set(rgl.static = hook_rgl)
@@ -49,124 +51,89 @@ set.seed(23)
 
 ## Action {.unnumbered}
 
-Building on the momentum and ideas of our last meeting, the following pipeline was drafted to produce the wildfire fuel mapping outputs that are described in the NRC grant "High-Resolution Mapping":
+Building on the momentum and ideas of our last meeting, the following pipeline was attempted to produce the wildfire fuel mapping outputs described in the NRC grant "High-Resolution Mapping":
 
 -   NRC Grant: <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
-#### *fwiRaster and sdmc calculated based on daily climate records*
+Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) (@wang2017cffdrs; @van1985equations; @van1987development), we developed rasters of forest fuel moisture code and wildfire weather indices (Table 1) that were used to fit the stand-adjusted fine-fuel model (@wotton2007stand) applied to vegetation rasters classified according to 16 fuel classes of the BC forest fuel typing algorithm ( @perrakis2018british). Resulting rasters were then used to fit the Canadian Forest Fire Behaviour Prediction model from which we drafted raster maps representing Head Fire Index (HFI) and Fire Intensity maps (FI) (Figure 1) for the Peachland watershed administration area on the day of June 30th 2021.
 
-#### *gfmc and hffmc calculated based on hourly climate records - key to CFFDRSv2.0*
+# ![](Data/CFFDRS%20Prototype.png)BC WildFire Fuel Typing VRI-Layer Algorithm
 
-#### *Start date of fire season calculated with fireSeason*
+## Import Site Data
 
-#### *All outputs generated for once-daily calcuylations for the full fireSeason chronologically using 'batch=TRUE' function*
-
-Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf), which was designed specifically for the purpose of the Canadian Forest Fire Danger Rating System (\@wang2017cffdrs) and was based on the methods of Van Wagner (\@van1987development), we were able to derive raster maps of fuel moisture content indices for five wildfire fuel indices and three wildfire wildfire weather and fuel behaviour indices.
-
-Two of these stand-based fuel moisture rasters, FFMC and DMC, were used to fit Wotton and Beverly's model of stand-adjusted fine fuel moisture content (\@wotton2007stand). This seems to be the 'go-to' in BC model for providing vegetation and forest fuel maps needed in the CFFDRSv2.0.
-
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Phase 1: Fuel Type Mapping            |       |   | Phase 2: Fuel Moisture Mapping |           |
-+=======================================+=======+===+================================+===========+
-| **CFFDRS Fuel Class**                 | Label |   | **Index**                      | **Label** |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Spruce-Lichen Woodland                | C-1   |   | Fine Fuel Moisture Code        | FFMC      |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Boreal Spruce                         | C-2   |   | Duff Moisture Code             | DMC       |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Mature Jack or Lodgepole Pine         | C-3   |   | Grass Fuel Moisture Code       | GFMC      |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Immature Jack or Lodgepol Pine        | C-4   |   | Sheltered Duff Code            | SDC       |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Red and White Pine                    | C-5   |   | Drought Code                   | DC        |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Conifer Plantation                    | C-6   |   | Build-Up Index                 | BUI       |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Ponderosa Pine                        | C-7   |   | Fire Weather Index             | FWI       |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Leafless Aspen                        | D-1   |   | Danger Severity Rating         | DSR       |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Boreal Mixedwood - Leafless           | M-1   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Boreal Mixedwood - Green              | M-2   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Dead Balsam Fir/ Mixedwood - Leafless | M-3   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Dead Balsam Fir/ Mixedwood - Green    | M-4   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Jack or Lodgepole Pine Slash          | S-1   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Spruce/Balsam Slash                   | S-2   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Coastal Cedar/Hemlock/Douglas-f Slash | S-3   |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Matted Grass                          | O-1a  |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-| Standing Grass                        | O-1b  |   |                                |           |
-+---------------------------------------+-------+---+--------------------------------+-----------+
-
-# BC WildFire Fuel Typing VRI-Layer Algorithm
-
-The FLNRO 2015 paper provides a really user-friendly screening algorithm of that is design with a hierachy of criteria suited for filtering or subsetting spatial objects in R (although Arc-built). For this, we imported the VRI dataset as a shapefile.shp from the manually downloaded imapBC files and transformed it into a simple feature object and processed it according to the fuel-type criteria checklist using sf, dplyr and terra functions. (*TODO: draft 'spatialPolygonDataFrame' pipeline for any potential future software compatibility issues.*)
-
-If its the former, there is some useful info found in the cffdrs package that describe the data requirements of the FWI System There is also a FWI test dataset 'test_fwi' showing the format of these inputs that is presented below. In the pilot test below, we generated the five raster predictors that are required inputs in the Wotton standjust CFFDRS model. These rasters were derived for the Peachland watershed area for the 2021 fire season period up until June 30th of that year.
+An area-of-interest polygon was adopted from the Peachland watershed administration boundary, which was downloaded using the ImapBC custom warehouse download tool. This outline was used to clip and reproject all other raster objects and output using the GeoBC accepted BCAlbers CRS (EPSG:3005) and ggplot functions seen below.
 
 ```{r}
-library(cffdrs)
-print(as_tibble(test_fwi), n = 10)
-```
-
-However, if its the second, and they are wanting a deliverable that is purely fuel-type focused, it may be worth having at look at and following closely the 'FLNRO 2015 BC Fuel-Typing and VRI-Layering Framework' (\@perrakis2018british). In it, they've developed an Arc-Python based algorithm that filters the VRI dataset using a kind of multi-criteria classification key to delineate landscapes into polygons according to the 16 Canadian Standard Fuel Type classes (\@hirsch1996canadian). In the final section below, we made a rough attempt of fitting this algorithm and coding the 100-plus VRI-criteria-layers (only got to 23) to generate similar fuel-type rasters. This report, its scripts and its virtual environment are stored in the github repo here: <https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>.
-
-# Stand-Adjusted CFFDRS Fuel Typing Model
-
-Five spatial predictor variables are needed to fit the Wotton and Beverly stand-adjusted fuel typing model (\@wotton2007stand) : "FFMC, DMC, stand (1:5; deciduous, Douglas-fir, mixedwood, pine, spruce), density (1:3; light, mod, dense), season (1, 1.5, 2, 3; spring, spr-sum transition, sum, fall). Two of these predictors, including density and stand were extracted from VRI-layers as simpleFeatures objects and then rasterized and stacked using the terra and raster packages.
-
-```{r, fig.show='hold', out.width="50%"}
-library(ggplot2)
 watershed_bdrys = read_sf("./Data/BCGW_7113060B_1645786298548_3276/LWADM_WATMGMT_PREC_AREA_SVW/LWADM_PA_polygon.shp")
 peachland = watershed_bdrys[watershed_bdrys$PRECNC_NAM == "Peachland", ]
-vri_sf = read_sf("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
-vri_sf = st_intersection(st_make_valid(vri_sf), peachland)
-
-stand = vri_sf["SPEC_CD_1"] %>%
-  mutate(SPEC_CD_1 = as.factor(SPEC_CD_1))
-stand = rename(stand, stand = SPEC_CD_1)
-summary.factor(stand$stand)
-
-density = vri_sf["LIVE_STEMS"] %>%
-  mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
-density = rename(density, density = LIVE_STEMS)
-summary(density)
-
-ggplot(stand) + geom_sf(aes(fill=stand), size = 0.05)
-ggplot(density) + geom_sf(aes(fill=density), size = 0.0005) + scale_fill_viridis_c()
+st_crs(peachland) = "epsg:3005"
+ggplot(peachland) + 
+  geom_sf() + 
+  coord_sf()
 ```
 
-To derive FFMC and DMC rasters we needed to process four climatic rasters representing mean daily conditions since the start of fire season (first day of mean daily temperature above 12C) to June 30th for: 1) mean daily temperature at 2m, 2) mean daily precipitation, 3) mean relative humidity, 4) and mean wind speed at 10m. Climatic rasters were download as NetCDF files from NASA Power platform and imported directly as rasters from their .nc extensive format. The NASA Power platform also provides nice, user-friendly API data source links that would be ideal for this kind of software and grant deliverable
+## Import Topographical Data
+
+For testing purposes, we acquired open source LiDAR data using the 'elevatr' package to download the SRTM 3arc-seconds dataset (@van2001shuttle). To land the download, we generated a spatial data object from the peachland simple feature. All rasters were labelled to match those required by the fwiRaster and fpbRaster functions. The 3-arc second DEM was transformed into a spatRaster for speedier operations and disaggreated from 98m resolution to 32m\~ resolution. Slope and aspect rasters calculated using the terra::terrain function and clipped to the preachland watershed boundary.
+
+```{r, fig.show='hold', out.width="33%"}
+peachland_sp = as(peachland, "Spatial")
+ELV = get_elev_raster(peachland_sp, z = 9)
+ELV = rast(ELV)
+ELV = disagg(ELV, fact=3.3)
+crs(ELV) = "epsg:3005"
+ELV = mask(ELV, vect(peachland_sp))
+GS = terrain(ELV, "slope")
+Aspect = terrain(ELV, "aspect")
+GS = mask(GS, vect(peachland_sp))
+Aspect = mask(Aspect, vect(peachland_sp))
+plot(GS)
+plot(ELV)
+plot(Aspect)
+```
+
+## Import Climate Data
+
+Climate variables were downloaded as NetCDF files from NASA Power platform and read directly into R as rasters of 1) mean daily temperature at 2m, 2) mean daily precipitation, 3) mean relative humidity, 4) and mean wind speed at 10m. The NASA Power platform supports some very user-friendly API links for static data sources that might be useful for this proposed grant project. REminder tho, some API's prefer dealing with dataframe inputs so might be worht preparing df pipe while still fresh in the head.
 
 -   NASA Power Platform: <https://power.larc.nasa.gov/data-access-viewer/>
 
 ```{r, fig.show='hold', out.width="50%"}
-temp = raster::raster("./Data/temp.nc")
-prec = raster::raster("./Data/prec.nc")
-rh = raster::raster("./Data/rh.nc")
-ws = raster::raster("./Data/ws.nc")
-
+temp = terra::rast("./Data/temp.nc")
+prec = terra::rast("./Data/prec.nc")
+rh = terra::rast("./Data/rh.nc")
+ws = terra::rast("./Data/ws.nc")
+temp = terra::resample(temp, ELV, method="bilinear")
+prec = terra::resample(prec, ELV, method="bilinear")
+rh = terra::resample(rh, ELV, method="bilinear")
+ws = terra::resample(ws, ELV, method="bilinear")
+temp = mask(temp, vect(peachland))
+prec = mask(prec, vect(peachland))
+rh = mask(rh, vect(peachland))
+ws = mask(ws, vect(peachland))
+temp = mean(temp)
+prec = mean(prec)
+rh = mean(rh)
+ws = mean(ws)
 names(temp) = 'temp'
 names(prec) = 'prec'
 names(rh) = 'rh'
 names(ws) = 'ws'
-
 plot(temp)
 plot(prec)
 plot(rh)
 plot(ws)
 ```
 
-Interpolated climate predictors were assembled as a raster stack and inputted to the fwiRaster function in the cffdrs package. 'out="all'" was selected to produce raster outputs for the three FWI fuel moisture indices of Fine Fuel Moisture Code (FFMC), Duff Moisture Code (DMC), Drought Code (DC), as well as raster outputs for Initial Spread Index (isi), Build-up Index (bui), Fire Weather Index (fwi), and Danger Severity Rating (dsr).
+## Derive CFFDRS Wildfire Weather Rasters
+
+Interpolated climate predictors were assembled as a raster stack and inputted into the fwiRaster function. The 'out="all'" option was selectedin the fwiRaster function which gave us the additional raster outputs for Initial Spread Index (isi), and Build-up Index (bui).
 
 ```{r}
+temp = raster::raster(temp)
+prec = raster::raster(prec)
+rh = raster::raster(rh)
+ws = raster::raster(ws)
 stack = stack(temp, rh, ws, prec)
 fwi_outputs = fwiRaster(stack, out = "all")
 plot(fwi_outputs)
@@ -179,43 +146,61 @@ fwi = raster(fwi_outputs, layer=10)
 dsr = raster(fwi_outputs, layer=11)
 ```
 
-```{r, eval=FALSE}
-fields::stats(vri_sf$HRVSTDT)
-fields::stats(vri_sf$C_I_CODE)
-fields::stats(vri_sf$BEC_ZONE)
+# Import VRI Data
 
-#fuel_algo = dplyr::filter(vri_sf, HRVSTDT == NA | HRVSTDT < 2016)
-vri_harvest = vri_sf["HRVSTDT"]
-wildfire_sf = wildfire_sf["FIRE_YEAR"]
-wildfire_aoi = wildfire_sf$FIRE_YEAR > 2000
-wildfire_aoi = st_intersection(st_make_valid(wildfire_sf), aoi_sf)
-vri_species_aoi = st_intersection(st_make_valid(vri_species), aoi_sf)
-vri_species_aoi$SPEC_CD_1 = as.factor(vri_species_aoi$SPEC_CD_1)
-vri_species_aoi =  dplyr::filter(vri_species_aoi, SPEC_CD_1 == "PL" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SE" )
+We imported the VRI dataset from imapBC and imported as a shapefile.shp into R. The BRI object was transformed into a simple feature and processed using sf and dplyr functions. For an idea of CFFDRS data requirements, we've taken a look at the in-built sample datasets 'test_fwi' and 'test_fpb' below:
 
-
+```{r}
+library(cffdrs)
+print(as_tibble(test_fwi), n = 10)
+print(as_tibble(test_fbp), n = 10)
 ```
 
-*TODO: Finish dataframe pipeline below for less buggy inputs with shiny app deploys.*
+# Import VRI Data
 
-Send to Appendix: Following chunk includes functions for developing dataframe inputs in case of likely software compatability issues.
+```{r, fig.show='hold', out.width="50%"}
+vri_sf = read_sf("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
+vri_sf = st_intersection(st_make_valid(vri_sf), peachland)
+stand = vri_sf["SPEC_CD_1"] %>% mutate(SPEC_CD_1 = as.factor(SPEC_CD_1))
+stand = rename(stand, stand = SPEC_CD_1)
+summary.factor(stand$stand)
+density = vri_sf["LIVE_STEMS"] %>% mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
+density = rename(density, density = LIVE_STEMS)
+summary(density)
+ggplot(stand) + geom_sf(aes(fill=stand), size = 0.05)
+ggplot(density) + geom_sf(aes(fill=density), size = 0.0005) + scale_fill_viridis_c()
+```
 
-```{r, eval=FALSE}
-climate_vars = read.csv("./Data/power_nasa_kelowna.csv")
-climate_vars_sf = st_as_sf(climate_vars, coords = c("LAT", "LON"), crs = 4326)
-raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=20, crs = "EPSG:3153")
-temp = climate_vars_sf["T2M"]
-temp = dplyr::rename(temp, temp = T2M)
-temp = rasterize(temp, raster_template, res=20)
-rh = climate_vars_sf["RH2M"]
-rh = dplyr::rename(rh, rh = RH2M)
-rh = rasterize(rh, raster_template, res=20)
-ws = climate_vars_sf["WS10M"]
-ws = dplyr::rename(ws, ws = WS10M)
-ws = rasterize(ws, raster_template, res=20)
-prec = climate_vars_sf["PRECTOTCORR"]
-prec = dplyr::rename(prec, prec = PRECTOTCORR)
-prec = rasterize(prec, raster_template, res=20)
-stack = stack(temp, rh, ws, prec)
-fwi_outputs_dfpipe = fwiRaster(stack)
+```{r, eval=FALSE} 
+plot(st_geometry(vri_sf))
+
+
+# Queries
+fields::stats(vri_sf$HRVSTDT) 
+fields::stats(vri_sf$C_I_CODE) 
+fields::stats(vri_sf$BEC_ZONE) 
+fields::stats(vri_sf$BCLCS_LV_1)
+
+psych::descri(vri_sf)
+
+summary.factor(vri_sf\$SPEC_CD_1)
+
+C1_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, BEC_ZONE == "BWBS" \| BEC_ZONE == "SWB", SPEC_CD_1 =='S' \| SPEC_CD_1 == 'SB' \| SPEC_CD_1 == 'SE' \| SPEC_CD_1 =='SX')
+
+C2_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, BEC_ZONE == "BWBS" \| BEC_ZONE == "SWB", SPEC_CD_1 =='S' \| SPEC_CD_1 == 'SB' \| SPEC_CD_1 == 'SE' \| SPEC_CD_1 =='SX')
+
+C3_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P' \| SPEC_CD_1 =='SE',)
+
+C4_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P' \| SPEC_CD_1 =='SE',)
+
+C4_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P', vri_sf\$PROJ_AGE_1 \< 2) \# Competitor Tools for Fuel Typing in BC 2022
+
+#### *fwiRaster and sdmc calculated based on daily climate records*
+
+#### *gfmc and hffmc calculated based on hourly climate records - key to CFFDRSv2.0*
+
+#### *Start date of fire season calculated with fireSeason*
+
+#### *All outputs generated for once-daily calcuylations for the full fireSeason chronologically using 'batch=TRUE' function*
+
 ```
