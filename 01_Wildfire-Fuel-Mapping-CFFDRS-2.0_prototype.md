@@ -1,44 +1,233 @@
-Proof of Concept: Fuel Mapping CFFDRSv2.0 Prototype
+Proof of Concept:
 ================
 CabinGIS
 24/02/2022
 
 -   [Action](#action)
--   [1 Stand-Adjusted CFFDRS Fuel Typing
-    Model](#stand-adjusted-cffdrs-fuel-typing-model)
--   [2 BC WildFire Fuel Typing VRI-Layer
-    Algorithm](#bc-wildfire-fuel-typing-vri-layer-algorithm)
+-   [1 ![](Data/CFFDRS%20Prototype.png)BC WildFire Fuel Typing and
+    VRI-Layer Classification
+    Algorithm](#bc-wildfire-fuel-typing-and-vri-layer-classification-algorithm)
+    -   [1.1 Import Site Data](#import-site-data)
+    -   [1.2 Import Topographical Data](#import-topographical-data)
+    -   [1.3 Import Climate Data](#import-climate-data)
+    -   [1.4 Derive CFFDRS Wildfire Weather
+        Rasters](#derive-cffdrs-wildfire-weather-rasters)
+-   [2 Import VRI Data](#import-vri-data)
 
 ## Action
 
-Building on the momentum of our last meeting, the following pipeline was
-drafted to produce two mapping outputs similar to those described as
-deliverables in the NRC grant “High-Resolution Mapping”:
+Building on the momentum and ideas of our last meeting, the following
+pipeline was attempted to produce the wildfire fuel mapping outputs
+described in the NRC grant “High-Resolution Mapping”:
 
 -   NRC Grant: <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
-We’ve since found some relevant R-tools that were developed by NRC in
-the new [cffdrs
+Using the new [cffdrs
 R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf)
-specifically for generating the two main components of the Canadian
-Forest Fire Danger Rating System: the Fire Weather Index and the Fire
-Prediction Behaviour Model. These include algorithms to measure three
-forest fuels classes and their moisture content indices: Fine Fuel
-Moisture Code (FFMC), Duff Moisture Code (DMC), Drought Code (DC). FFMC
-and DMC make up two of the five predictors needed to run the Wotton and
-Beverly’s stand-adjusted fuel-typing model (@wotton2007stand). Need a
-second opinion here as it doesn’t seem 100% clear if NRC are interested
-in vegetation mapping outputs that are focused solely on fuel typing
-without the moisture codes and climate variables, or they want something
-that includes the FFMC and DMC.
+(Wang et al. (2017); Van Wagner and Pickett (1985); Van Wagner (1987)),
+we developed rasters of forest fuel moisture code and wildfire weather
+indices (Table 1) that were used to fit the stand-adjusted fine-fuel
+model (Wotton and Beverly (2007)) applied to vegetation rasters
+classified according to 16 fuel classes of the BC forest fuel typing
+algorithm ( Perrakis, Eade, and Hicks (2018)). REeult rasters were then
+used to fit the Canadian Forest Fire Behaviour Prediction model from
+which we drafted raster maps representing Head Fire Index (HFI) and Fire
+Intensity maps (FI) (Figure 1) for the Okanagan Watershed Basin for the
+day of June 30th 2021.
 
-If its the former, there is some useful info found in the cffdrs package
-that describe the data requirements of the FWI System There is also a
-FWI test dataset ‘test_fwi’ showing the format of these inputs that is
-presented below. In the pilot test below, we generated the five raster
-predictors that are required inputs in the Wotton standjust CFFDRS
-model. These rasters were derived for the Peachland watershed area for
-the 2021 fire season period up until June 30th of that year.
+# 1 ![](Data/CFFDRS%20Prototype.png)BC WildFire Fuel Typing and VRI-Layer Classification Algorithm
+
+## 1.1 Import Site Data
+
+We applied the Okanagan Watershed boundary (FWA ID:212) as our area of
+interest, which was downloaded from the BC Geographic Warehouse. We
+tested potential base mapping services from [Google Cloud
+API](https://cloud.google.com/maps-platform/) and the ggmap package with
+a free personal account key token. Four basemaps were derived at a zoom
+setting of 9 at the latitude and longitude location of (-119, 50.0).
+Likely that Google Cloud services are working off EPSG 3857, though this
+needs confirming. With the default ‘statellite’ basemap, we used Lobo’s
+script
+[(2014)](https://rstudio-pubs-static.s3.amazonaws.com/16660_7d1ab1b355344578bbacb0747fd485c8.html)
+to transform the RGB raster to a matrix object and a SpatRaster before
+applying different mapping styles. Note that chunk outputs require
+substantial system memory and may cause crashes.
+
+``` r
+register_google(key = 'AIzaSyDbjpyUjJp3VInMOqebU9yp2zff5hA-zBM')
+gmap1 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "satellite", source = "google", zoom = 9))
+gmap2 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "toner-lite", zoom = 9))
+gmap3 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "toner-background", zoom = 9))
+gmap4 = ggmap(get_map(location = c(-119.7, 50.0), mqptype="terrain-labels", zoom = 9))
+```
+
+``` r
+mgmap <- as.matrix(gmap)
+vgmap <- as.vector(mgmap)
+vgmaprgb <- col2rgb(vgmap)
+gmapr <- matrix(vgmaprgb[1, ], ncol = ncol(mgmap), nrow = nrow(mgmap))
+gmapg <- matrix(vgmaprgb[2, ], ncol = ncol(mgmap), nrow = nrow(mgmap))
+gmapb <- matrix(vgmaprgb[3, ], ncol = ncol(mgmap), nrow = nrow(mgmap))
+rgmaprgb <- brick(raster(gmapr), raster(gmapg), raster(gmapb))
+rm(gmapr, gmapg, gmapb)
+rgmaprgbGM <- rgmaprgb
+raster::projection(rgmaprgbGM) <- CRS("+init=epsg:3857")
+extent(rgmaprgbGM) <- unlist(attr(gmap, which = "bb"))[c(2, 4, 1, 3)]
+unlist(attr(gmap, which = "bb"))[c(2, 4, 1, 3)]
+rprobextSpDF <- as(extent(unlist(attr(gmap, which = "bb"))[c(2, 4, 1, 3)]), "SpatialPolygons")
+raster::projection(rprobextSpDF) <- CRS("+init=epsg:4326")
+rprobextGM <- spTransform(rprobextSpDF, CRS("+init=epsg:3857"))
+extent(rgmaprgbGM) <- c(rprobextGM@bbox[1, ], rprobextGM@bbox[2, ])
+rgmaprgbGM_disksafe = writeRaster(rgmaprgbGM, file = "rgmaprgbGM", format = "GTiff", overwrite = TRUE, datatype = "INT1U")
+xcenter <- (extent(rgmaprgbGM)@xmax + extent(rgmaprgbGM)@xmin)/2
+ycenter <- (extent(rgmaprgbGM)@ymax + extent(rgmaprgbGM)@ymin)/2
+height <- extent(rgmaprgbGM)@xmax - extent(rgmaprgbGM)@xmin
+width <- extent(rgmaprgbGM)@ymax - extent(rgmaprgbGM)@ymin
+```
+
+The Okanagan Watershed boundary was extracted from British Columbia
+Freshwater Atlas Dataset and processed as a simple feature reprojected
+to the EPSG:3857 coordinate reference system match the Google Cloud
+Mapping API.
+
+``` r
+watershed_okanagan = st_read("./Data/watershed-okanagan-QX.shp")
+```
+
+    ## Reading layer `watershed-okanagan-QX' from data source 
+    ##   `/Volumes/128GB_WORKD/EFI-FIRE/01_Wildfire-Mapping-CFFDRS-2.0_prototype/Data/watershed-okanagan-QX.shp' 
+    ##   using driver `ESRI Shapefile'
+    ## Simple feature collection with 1 feature and 6 fields
+    ## Geometry type: POLYGON
+    ## Dimension:     XY
+    ## Bounding box:  xmin: 1413784 ymin: 464311.2 xmax: 1515562 ymax: 647056.5
+    ## Projected CRS: NAD83(CSRS) / BC Albers
+
+``` r
+ggplot(watershed_okanagan) + geom_sf(alpha=0.1) + coord_sf()
+```
+
+![](01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-3-1.png)<!-- -->
+
+## 1.2 Import Topographical Data
+
+LiDAR data of 3-arc second resolution was acquired using the ‘elevatr’
+package and the continuing Mapzen license (Van Zyl (2001)). DEM data was
+transformed into a spatRaster and disaggreated from 98m resolution fown
+to 32m\~ resolution. Slope and aspect rasters were calculated using the
+terra::terrain function with a bilinear interpolation and a rook
+neighbourhood sampling of 8 adjacent cells. This produced problematic
+results and the raster processing approach was oapplied using the
+deprecated slopeAspect functions.
+
+``` r
+ELV = get_elev_raster(watershed_okanagan, z=9)
+#raster::projection(ELV) <- CRS("+init=epsg:3857")
+GS = slopeAspect(ELV, filename = "./Data/GS.tif", out='aspect', unit='degrees', neighbors=8, overwrite=TRUE)  
+GS = raster("./Data/GS.tif")
+GS = rast(GS)
+Aspect = slopeAspect(ELV, filename = "./Data/Aspect.tif", out='slope', unit='degrees', neighbors=8, overwrite=TRUE)  
+Aspect = raster("./Data/Aspect.tif")
+Aspect = rast(Aspect)
+ELV = rast(ELV)
+ELV = disagg(ELV, fact=3.3)
+GS = resample(GS, ELV, method="bilinear")
+Aspect = resample(Aspect, ELV, method="bilinear")
+Aspect = mask(Aspect, vect(watershed_okanagan))
+GS = mask(GS, vect(watershed_okanagan))
+ELV = mask(ELV, vect(watershed_okanagan))
+plot(GS, main='slope')
+plot(ELV, main='elevation')
+plot(Aspect, main='aspect')
+```
+
+<img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-4-1.png" width="33%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-4-2.png" width="33%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-4-3.png" width="33%" />
+
+## 1.3 Import Climate Data
+
+Climate variables were downloaded as NetCDF files from NASA Power
+platform and read directly into R as rasters of 1) mean daily
+temperature at 2m, 2) mean daily precipitation, 3) mean relative
+humidity, 4) and mean wind speed at 10m. The NASA Power platform
+supports some very user-friendly API links for static data sources that
+might be useful for this proposed grant project. REminder tho, some
+API’s prefer dealing with dataframe inputs so might be worht preparing
+df pipe while still fresh in the head.
+
+-   NASA Power Platform:
+    <https://power.larc.nasa.gov/data-access-viewer/>
+
+``` r
+temp = terra::rast("./Data/temp.nc")
+prec = terra::rast("./Data/prec.nc")
+rh = terra::rast("./Data/rh.nc")
+ws = terra::rast("./Data/ws.nc")
+temp = mask(temp, vect(watershed_okanagan))
+prec = mask(prec, vect(watershed_okanagan))
+rh = mask(rh, vect(watershed_okanagan))
+ws = mask(ws, vect(watershed_okanagan))
+temp = mean(temp)
+prec = mean(prec)
+rh = mean(rh)
+ws = mean(ws)
+names(temp) = 'temp'
+names(prec) = 'prec'
+names(rh) = 'rh'
+names(ws) = 'ws'
+plot(temp, main='temperature (2m)')
+plot(prec, main='precipitation (mm/day)')
+plot(rh, main='relative humidity')
+plot(ws, main='wind speed (10m)')
+#temp = terra::resample(temp, ELV, method="bilinear")
+#prec = terra::resample(prec, ELV, method="bilinear")
+#rh = terra::resample(rh, ELV, method="bilinear")
+#ws = terra::resample(ws, ELV, method="bilinear")
+```
+
+<img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-5-1.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-5-2.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-5-3.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-5-4.png" width="50%" />
+
+## 1.4 Derive CFFDRS Wildfire Weather Rasters
+
+Interpolated climate predictors were assembled as a raster stack and
+inputted into the fwiRaster function. The ’out=“all’” option was
+selectedin the fwiRaster function which gave us the additional raster
+outputs for Initial Spread Index (isi), and Build-up Index (bui).
+
+``` r
+temp = raster::raster(temp)
+prec = raster::raster(prec)
+rh = raster::raster(rh)
+ws = raster::raster(ws)
+stack = stack(temp, rh, ws, prec)
+names(stack)
+```
+
+    ## [1] "temp" "rh"   "ws"   "prec"
+
+``` r
+fwi_outputs = fwiRaster(stack, out = "all")
+plot(fwi_outputs)
+```
+
+![](01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-6-1.png)<!-- -->
+
+``` r
+ffmc = raster(fwi_outputs, layer=5)
+dmc = raster(fwi_outputs, layer=6)
+dc = raster(fwi_outputs, layer=7)
+isi = raster(fwi_outputs, layer=8)
+bui = raster(fwi_outputs, layer=9)
+fwi = raster(fwi_outputs, layer=10)
+dsr = raster(fwi_outputs, layer=11)
+```
+
+# 2 Import VRI Data
+
+The VRI dataset was downloaded from imapBC as a shapefile.shp and
+transformed into simple feature for processing oeprations using sf and
+dplyr functions. For CFFDRS data requirements, we consulted the two
+package-provied sample datasets ‘test_fwi’ and ‘test_fpb’ presented
+below:
 
 ``` r
 library(cffdrs)
@@ -60,177 +249,146 @@ print(as_tibble(test_fwi), n = 10)
     ## 10  -100    40  1985     4    22   7      93    14   9  
     ## # … with 38 more rows
 
-However, if its the second, and they are wanting a deliverable that is
-purely fuel-type focused, it may be worth having at look at and
-following closely the ‘FLNRO 2015 BC Fuel-Typing and VRI-Layering
-Framework’ (@perrakis2018british). In it, they’ve developed an
-Arc-Python based algorithm that filters the VRI dataset using a kind of
-multi-criteria classification key to delineate landscapes into polygons
-according to the 16 Canadian Standard Fuel Type classes
-(@hirsch1996canadian). In the final section below, we made a rough
-attempt of fitting this algorithm and coding the 100-plus
-VRI-criteria-layers (only got to 23) to generate similar fuel-type
-rasters. This report, its scripts and its virtual environment are stored
-in the github repo here:
-<https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0>.
+``` r
+print(as_tibble(test_fbp), n = 10)
+```
 
-# 1 Stand-Adjusted CFFDRS Fuel Typing Model
+    ## # A tibble: 20 × 24
+    ##       id FuelType   LAT  LONG   ELV  FFMC   BUI    WS    WD    GS    Dj    D0
+    ##    <int> <fct>    <int> <int> <int> <dbl> <int> <dbl> <int> <int> <int> <int>
+    ##  1     1 C-1         55   110    NA  90     130  20       0    15   182    NA
+    ##  2     2 C2          50    90    NA  97     119  20.4     0    75   121    NA
+    ##  3     3 C-3         55   110    NA  95      30  50       0     0   182    NA
+    ##  4     4 C-4         55   105   200  85      82   0      NA    75   182    NA
+    ##  5     5 c5          55   105    NA  88      56   3.4     0    23   152   145
+    ##  6     6 C-6         55   105    NA  94      56  25       0    10   152   132
+    ##  7     7 C-7         50   125    NA  88.8    15  22.1   270    15   152    NA
+    ##  8     8 D-1         45   100    NA  98     100  50     270    35   152    NA
+    ##  9     9 M-1         47    85    NA  90      40  15.5   180    25   182    NA
+    ## 10    10 M-2         63   120   100  97     150  41     180    50   213    NA
+    ## # … with 10 more rows, and 12 more variables: hr <dbl>, PC <int>, PDF <int>,
+    ## #   GFL <dbl>, cc <int>, theta <int>, Accel <int>, Aspect <int>, BUIEff <int>,
+    ## #   CBH <lgl>, CFL <lgl>, ISI <int>
 
-Five spatial predictor variables are needed to fit the Wotton and
-Beverly stand-adjusted fuel typing model (@wotton2007stand) : “FFMC,
-DMC, stand (1:5; deciduous, Douglas-fir, mixedwood, pine, spruce),
-density (1:3; light, mod, dense), season (1, 1.5, 2, 3; spring, spr-sum
-transition, sum, fall). Two of these predictors, including density and
-stand were extracted from VRI-layers as simpleFeatures objects and then
-rasterized and stacked using the terra and raster packages.
+Wotton and Beverly’s model of stand-adjusted fine fuel moisture content
+requires five predictor variables, two of which were extracted directly
+from spatial layers of the the VRI dataset including stand-type
+(‘SPEC_CD_1 ==?’ & ’SPEC_PCT_1 \> 0.80)
 
 ``` r
-library(ggplot2)
-watershed_bdrys = read_sf("./Data/BCGW_7113060B_1645786298548_3276/LWADM_WATMGMT_PREC_AREA_SVW/LWADM_PA_polygon.shp")
-peachland = watershed_bdrys[watershed_bdrys$PRECNC_NAM == "Peachland", ]
-vri_sf = read_sf("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
-vri_sf = st_intersection(st_make_valid(vri_sf), peachland)
-
-stand = vri_sf["SPEC_CD_1"] %>%
-  mutate(SPEC_CD_1 = as.factor(SPEC_CD_1))
+vri2020_sf = st_read("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
+st_crs(watershed_okanagan) = 3005
+vri2020_sf = st_intersection(st_make_valid(vri2020_sf), watershed_okanagan)
+stand = vri_sf["SPEC_CD_1"] %>% mutate(SPEC_CD_1 = as.factor(SPEC_CD_1))
 stand = rename(stand, stand = SPEC_CD_1)
 summary.factor(stand$stand)
-```
 
-    ##   AC  ACT   AT    B   BL   CW   EP   FD  FDI   LW   PA   PL  PLI   PY    S   SB 
-    ##    1   33  496    4 1122    9  104 2255 1648   20   10 1804 1752  299   60    1 
-    ##   SE   SX NA's 
-    ##  214 1349  875
+vri2020_sf %>% select(name, SPEC_CD_1) %>% mutate(
+  C1 = SPEC_CD_1 = 'S')
 
-``` r
-density = vri_sf["LIVE_STEMS"] %>%
-  mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
+vri_species_aoi$species_class = dplyr::recode(vri_species_aoi$SPEC_CD_1, 
+             PL = 0, PLI = 0, SB = 1, SE = 1, SX = 1, FD = 2, FDI = 2,CW = 3, HW = 4, BL = 5)
+
+density = vri_sf["LIVE_STEMS"] %>% mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
 density = rename(density, density = LIVE_STEMS)
-summary(density)
-```
-
-    ##     density                 geometry    
-    ##  Min.   :    0.0   MULTIPOLYGON :   98  
-    ##  1st Qu.:  413.0   POLYGON      :11958  
-    ##  Median :  740.0   epsg:3005    :    0  
-    ##  Mean   :  982.8   +proj=aea ...:    0  
-    ##  3rd Qu.: 1116.0                        
-    ##  Max.   :30820.0                        
-    ##  NA's   :812
-
-``` r
 ggplot(stand) + geom_sf(aes(fill=stand), size = 0.05)
 ggplot(density) + geom_sf(aes(fill=density), size = 0.0005) + scale_fill_viridis_c()
+vri2020_sf$SPEC_PCT_1
+#M1_fuel_mixedwood80 = vri2020_sf$
 ```
-
-<img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-2-1.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-2-2.png" width="50%" />
-
-To derive FFMC and DMC rasters we needed to process four climatic
-rasters representing mean daily conditions since the start of fire
-season (first day of mean daily temperature above 12C) to June 30th
-for: 1) mean daily temperature at 2m, 2) mean daily precipitation, 3)
-mean relative humidity, 4) and mean wind speed at 10m. Climatic rasters
-were download as NetCDF files from NASA Power platform and imported
-directly as rasters from their .nc extensive format. The NASA Power
-platform also provides nice, user-friendly API data source links that
-would be ideal for this kind of software and grant deliverable
-
--   NASA Power Platform:
-    <https://power.larc.nasa.gov/data-access-viewer/>
 
 ``` r
-temp = raster::raster("./Data/temp.nc")
-prec = raster::raster("./Data/prec.nc")
-rh = raster::raster("./Data/rh.nc")
-ws = raster::raster("./Data/ws.nc")
+stand = vri_sf["SPEC_CD_1"] %>% mutate(SPEC_CD_1 = as.factor(SPEC_CD_1))
 
-names(temp) = 'temp'
-names(prec) = 'prec'
-names(rh) = 'rh'
-names(ws) = 'ws'
 
-plot(temp)
-plot(prec)
-plot(rh)
-plot(ws)
+raster::crs(watershed_bcimap) = "EPSG:3005"
+plot(watershed_bcimap)
+watershed_bcimap$Export
+
+
+plot(st_geometry(vri_sf))
+plot(st_geometry(cutblk_sf))
+fields::stats(vri_sf) 
+fields::stats(cutblk_sf) 
+
+fields::stats(vri_sf$HRVSTDT) 
+fields::stats(vri_sf$C_I_CODE) 
+fields::stats(vri_sf$BEC_ZONE) 
+fields::stats(vri_sf$BCLCS_LV_1)
+
+C1_fuel = vri_sf %>% 
+  dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', 
+                HRVSTDT > 19970000 | HRVSTDT > 20140000 | HRVSTDT == NA, 
+                BEC_ZONE == "BWBS" \| BEC_ZONE == "SWB", 
+                SPEC_CD_1 =='S' | SPEC_CD_1 == 'SB' | SPEC_CD_1 == 'SE' | SPEC_CD_1 =='SX')
+
+M1_fuel = vri_sf %>% d
+
+C2_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, BEC_ZONE == "BWBS" \| BEC_ZONE == "SWB", SPEC_CD_1 =='S' \| SPEC_CD_1 == 'SB' \| SPEC_CD_1 == 'SE' \| SPEC_CD_1 =='SX')
+
+C3_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P' \| SPEC_CD_1 =='SE',)
+
+C4_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P' \| SPEC_CD_1 =='SE',)
+
+C4_fuel = vri_sf %>% dplyr::filter(BCLCS_LV_2 == 'V', BCLCS_LV_1 == 'V', HRVSTDT \> 19970000, HRVSTDT \> 20140000, SPEC_CD_1 =='Pl' \| SPEC_CD_1 == 'Pli' \| SPEC_CD_1 == 'Plc' \| SPEC_CD_1 =='Pj'\| SPEC_CD_1 == 'P', vri_sf\$PROJ_AGE_1 \< 2) \# Competitor Tools for Fuel Typing in BC 2022
+
+#### *fwiRaster and sdmc calculated based on daily climate records*
+
+#### *gfmc and hffmc calculated based on hourly climate records - key to CFFDRSv2.0*
+
+#### *Start date of fire season calculated with fireSeason*
+
+#### *All outputs generated for once-daily calcuylations for the full fireSeason chronologically using 'batch=TRUE' function*
 ```
 
-<img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-3-1.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-3-2.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-3-3.png" width="50%" /><img src="01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-3-4.png" width="50%" />
+<div id="refs" class="references csl-bib-body hanging-indent">
 
-Interpolated climate predictors were assembled as a raster stack and
-inputted to the fwiRaster function in the cffdrs package. ’out=“all’”
-was selected to produce raster outputs for the three FWI fuel moisture
-indices of Fine Fuel Moisture Code (FFMC), Duff Moisture Code (DMC),
-Drought Code (DC), as well as raster outputs for Initial Spread Index
-(isi), Build-up Index (bui), Fire Weather Index (fwi), and Danger
-Severity Rating (dsr).
+<div id="ref-perrakis2018british" class="csl-entry">
 
-``` r
-stack = stack(temp, rh, ws, prec)
-fwi_outputs = fwiRaster(stack, out = "all")
-plot(fwi_outputs)
-```
+Perrakis, Daniel DB, George Eade, and Dana Hicks. 2018. *British
+Columbia Wildfire Fuel Typing and Fuel Type Layer Description*. Canadian
+Forest Service, Natural Resources Canada.
 
-![](01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype_files/figure-gfm/unnamed-chunk-4-1.png)<!-- -->
+</div>
 
-``` r
-ffmc = raster(fwi_outputs, layer=5)
-dmc = raster(fwi_outputs, layer=6)
-dc = raster(fwi_outputs, layer=7)
-isi = raster(fwi_outputs, layer=8)
-bui = raster(fwi_outputs, layer=9)
-fwi = raster(fwi_outputs, layer=10)
-dsr = raster(fwi_outputs, layer=11)
-```
+<div id="ref-van1987development" class="csl-entry">
 
-# 2 BC WildFire Fuel Typing VRI-Layer Algorithm
+Van Wagner, CE. 1987. “Development and Structure of the Canadian Forest
+Fire Weather Index System. Canadian Forestry Service Forestry.”
+Technical Report 35, Ottawa.
 
-The FLNRO 2015 paper provides a really user-friendly screening algorithm
-of that is design with a hierachy of criteria suited for filtering or
-subsetting spatial objects in R (although Arc-built). For this, we
-imported the VRI dataset as a shapefile.shp from the manually downloaded
-imapBC files and transformed it into a simple feature object and
-processed it according to the fuel-type criteria checklist using sf,
-dplyr and terra functions. (*TODO: draft ‘spatialPolygonDataFrame’
-pipeline for any potential future software compatibility issues.*)
+</div>
 
-``` r
-fields::stats(vri_sf$HRVSTDT)
-fields::stats(vri_sf$C_I_CODE)
-fields::stats(vri_sf$BEC_ZONE)
+<div id="ref-van1985equations" class="csl-entry">
 
-#fuel_algo = dplyr::filter(vri_sf, HRVSTDT == NA | HRVSTDT < 2016)
-vri_harvest = vri_sf["HRVSTDT"]
-wildfire_sf = wildfire_sf["FIRE_YEAR"]
-wildfire_aoi = wildfire_sf$FIRE_YEAR > 2000
-wildfire_aoi = st_intersection(st_make_valid(wildfire_sf), aoi_sf)
-vri_species_aoi = st_intersection(st_make_valid(vri_species), aoi_sf)
-vri_species_aoi$SPEC_CD_1 = as.factor(vri_species_aoi$SPEC_CD_1)
-vri_species_aoi =  dplyr::filter(vri_species_aoi, SPEC_CD_1 == "PL" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SE" )
-```
+Van Wagner, CE, and TL Pickett. 1985. *Equations and FORTRAN Program for
+the Canadian Forest Fire Weather Index System*. Vol. 33.
 
-*TODO: Finish dataframe pipeline below for less buggy inputs with shiny
-app deploys.*
+</div>
 
-Send to Appendix: Following chunk includes functions for developing
-dataframe inputs in case of likely software compatability issues.
+<div id="ref-van2001shuttle" class="csl-entry">
 
-``` r
-climate_vars = read.csv("./Data/power_nasa_kelowna.csv")
-climate_vars_sf = st_as_sf(climate_vars, coords = c("LAT", "LON"), crs = 4326)
-raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=20, crs = "EPSG:3153")
-temp = climate_vars_sf["T2M"]
-temp = dplyr::rename(temp, temp = T2M)
-temp = rasterize(temp, raster_template, res=20)
-rh = climate_vars_sf["RH2M"]
-rh = dplyr::rename(rh, rh = RH2M)
-rh = rasterize(rh, raster_template, res=20)
-ws = climate_vars_sf["WS10M"]
-ws = dplyr::rename(ws, ws = WS10M)
-ws = rasterize(ws, raster_template, res=20)
-prec = climate_vars_sf["PRECTOTCORR"]
-prec = dplyr::rename(prec, prec = PRECTOTCORR)
-prec = rasterize(prec, raster_template, res=20)
-stack = stack(temp, rh, ws, prec)
-fwi_outputs_dfpipe = fwiRaster(stack)
-```
+Van Zyl, Jakob J. 2001. “The Shuttle Radar Topography Mission (SRTM): A
+Breakthrough in Remote Sensing of Topography.” *Acta Astronautica* 48
+(5-12): 559–65.
+
+</div>
+
+<div id="ref-wang2017cffdrs" class="csl-entry">
+
+Wang, Xianli, B Mike Wotton, Alan S Cantin, Marc-André Parisien, Kerry
+Anderson, Brett Moore, and Mike D Flannigan. 2017. “Cffdrs: An r Package
+for the Canadian Forest Fire Danger Rating System.” *Ecological
+Processes* 6 (1): 1–11.
+
+</div>
+
+<div id="ref-wotton2007stand" class="csl-entry">
+
+Wotton, B Mike, and Jennifer L Beverly. 2007. “Stand-Specific Litter
+Moisture Content Calibrations for the Canadian Fine Fuel Moisture Code.”
+*International Journal of Wildland Fire* 16 (4): 463–72.
+
+</div>
+
+</div>
