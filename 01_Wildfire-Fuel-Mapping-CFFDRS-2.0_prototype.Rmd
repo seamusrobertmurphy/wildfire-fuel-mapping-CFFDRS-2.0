@@ -87,7 +87,7 @@ ggplot(watershed_okanagan_sf) + geom_sf(alpha=0.1) + coord_sf()
 
 For potential GUI-widgets and tools, we tested potential base mapping services from [Google Cloud API](https://cloud.google.com/maps-platform/) using the ggmap package and a free API key token set up with personal google account. These required latitude-longitude coordinates as inputs. All data layers were projected to match the Google Pseudo Mercator (EPSG:3857) and then reprojected to CSRS EPSG:3153 for metric analyses. Four basemaps were tested using the API server at a zoom setting of 8 and a latitude and longitude location of -119, 50.0. Still some kinks to work out with the point location input, though seems that this point of interest route is more compatible, especially for working with NASA Power APIs.
 
-```{r}
+```{r, eval=FALSE}
 register_google(key = 'AIzaSyDbjpyUjJp3VInMOqebU9yp2zff5hA-zBM')
 gmap = get_map(location = c(-119.7, 50.0), maptype = "hybrid", source = "google", crop = FALSE, zoom = 8)
 gmap1 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "satellite", source = "google", zoom = 8))
@@ -126,10 +126,8 @@ extent(rgmaprgbGM) <- c(rprobextGM@bbox[1, ], rprobextGM@bbox[2, ])
 plotRGB(rgmaprgbGM)
 writeRaster(rgmaprgbGM, file = "./Data/rgmaprgbGM.tif", format = "GTiff", overwrite = TRUE, datatype = "INT1U")
 #watershed_okanagan_sp <- spTransform(watershed_okanagan_sp, CRS("+init=epsg:3857"))
-
 gmap_rast = rast(rgmaprgbGM)
 RGB(gmap_rast) = c(1,2,3)
-plot(gmap_rast)
 crs(gmap_rast) = "EPSG:3857"
 crs(watershed_okanagan_sv) = "EPSG:3857"
 st_transform(watershed_okanagan_sf, 3857)
@@ -149,7 +147,7 @@ tm_shape(gmap_rast)+
 
 LiDAR data at a resolution of 3 arc seconds was acquired using the 'elevatr' package. As far as we could find, this is one of the few remaining free sources of the SRTM dataset pre-processed at this resolution. It uses their the continuing Mapzen license (\@van2001shuttle). DEM data was transformed into a spatRaster and disaggreated from 98m resolution fown to 32m\~ resolution. Slope and aspect tasters were calculated using the terra::terrain function with a bilinear interpolation and a rook neighbourhood sampling of 8 adjacent cells. This produced problematic results and the raster processing approach was applied using the deprecated 'slopeAspect' function.
 
-```{r, fig.show='hold', out.width="33%", eval=FALSE}
+```{r, fig.show='hold', out.width="33%", echo=TRUE}
 ELV = get_elev_raster(watershed_okanagan_sf, z=8)
 GS = slopeAspect(ELV, filename = "./Data/GS.tif", 
   out='slope', unit='degrees', neighbors=8, overwrite=TRUE)
@@ -171,8 +169,7 @@ Aspect_sr = resample(Aspect_sr, ELV_sr, method="bilinear")
 ELV_sr = mask(ELV_sr, watershed_okanagan_sv)
 GS_sr = mask(GS_sr, watershed_okanagan_sv)
 Aspect_sr = mask(Aspect_sr, watershed_okanagan_sv)
-
-#POI route
+#POI option
 tm_shape(ELV)+
   tm_raster(style= "cont", title="Elevation ASL")+
   tm_layout(legend.outside = TRUE)+
@@ -181,7 +178,6 @@ tm_shape(ELV)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(GS)+
   tm_raster(style= "cont", title="Slope")+
   tm_layout(legend.outside = TRUE)+
@@ -190,7 +186,6 @@ tm_shape(GS)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(Aspect)+
   tm_raster(style= "cont", title="Aspect")+
   tm_layout(legend.outside = TRUE)+
@@ -199,8 +194,10 @@ tm_shape(Aspect)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
+```
 
-# AOI route
+```{r, eval=FALSE}
+# AOI option
 tm_shape(ELV_sr)+
   tm_raster(style= "cont", title="Elevation ASL")+
   tm_layout(legend.outside = TRUE)+
@@ -209,7 +206,6 @@ tm_shape(ELV_sr)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(GS_sr)+
   tm_raster(style= "cont", title="Slope")+
   tm_layout(legend.outside = TRUE)+
@@ -218,7 +214,6 @@ tm_shape(GS_sr)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(Aspect_sr)+
   tm_raster(style= "cont", title="Aspect")+
   tm_layout(legend.outside = TRUE)+
@@ -240,23 +235,19 @@ temp = terra::rast('NETCDF:"./Data/temp.nc"')
 prec = terra::rast('NETCDF:"./Data/precip.nc"')
 rh = terra::rast('NETCDF:"./Data/rh.nc"')
 ws = terra::rast('NETCDF:"./Data/ws.nc"')
-
-temp_ext = (ext(gmap_rast))
+temp_ext = (ext(ELV_sr))
 ext(temp) <- temp_ext
 temp = mean(temp)
 crs(temp) = "EPSG:3857"
-
-prec_ext = (ext(gmap_rast))
+prec_ext = (ext(ELV_sr))
 ext(prec) <- prec_ext
 prec = mean(prec)
 crs(prec) = "EPSG:3857"
-
-rh_ext = (ext(gmap_rast))
+rh_ext = (ext(ELV_sr))
 ext(rh) <- rh_ext
 rh = mean(rh)
 crs(rh) = "EPSG:3857"
-
-ws_ext = (ext(gmap_rast))
+ws_ext = (ext(ELV_sr))
 ext(ws) <- ws_ext
 ws = mean(ws)
 crs(ws) = "EPSG:3857"
@@ -269,7 +260,6 @@ tm_shape(temp)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(prec)+
   tm_raster(style= "cont", title="Precipitation (mm^3/day)")+
   tm_layout(legend.outside = TRUE)+
@@ -278,7 +268,6 @@ tm_shape(prec)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(rh)+
   tm_raster(style= "cont", title="Relative Humidity (NCDC/day 2m AGL)")+
   tm_layout(legend.outside = TRUE)+
@@ -287,7 +276,6 @@ tm_shape(rh)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 tm_shape(ws)+
   tm_raster(style= "cont", title="Wind Speed (m/s 10m AGL)")+
   tm_layout(legend.outside = TRUE)+
@@ -296,10 +284,17 @@ tm_shape(ws)+
   tm_compass(type = "8star", position = c("left", "top")) +
   tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
   tm_grid()
-
 ```
 
-# Importing VRI Data
+![](Data/temp_2m_spatraster_tmap.png)
+
+![](Data/prec_daily_spatRaster_tmap.png)
+
+![](Data/rh_ncdc2m_spatRaster_tmap.png)
+
+![](Data/ws_10m_spatRaster_tmap.png)
+
+# Generating CFFDRS Fuel Type Maps
 
 VRI data was downloaded from imapBC with AOI selected by hand. The data was imported as shapefile.shp and transformed into simple feature for processing. The CFFDRS package has some data formatting requirements. It offers a sample dataset for referring to, including dataframes and raster inputs needed for generating CFFDRS Fire Weather Index maps and CFFDRS Fire Predicted Behaviour maps - see 'test_fwi' and 'test_fpb' presented below.
 
@@ -311,17 +306,28 @@ print(as_tibble(test_fbp), n = 10)
 
 Wotton and Beverly's model of stand-adjusted fine fuel moisture content requires five predictor variables.. Two of these predictors were extracted the the VRI dataset including stand type ('SPEC_CD_1') and stand density (LIVE_STEMS). Applying the MFLNRO VRI-layer fuel-typing algorithm, rough scale criteria were used in a filtering process to classify fuel categories similar to those used in Wotton and Beverley's model. Much more VRI-filtering is possible with the dataset, but not sure if this approach is what NRC are aiming towards especially considering this work was covered by Perrakis et al in 2015.
 
-```{r, fig.show='hold', out.width="50%", eval=FALSE}
+```{r, eval=FALSE}
 vri2020_sf = st_read("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
-st_crs(vri2020_sf) = 3857
-
+st_crs(vri2020_sf) = crs(watershed_okanagan_sf)
 vri2020_sf = st_intersection(st_make_valid(vri2020_sf), watershed_okanagan_sf)
-str(vri2020_sf)
 
-fuel_attributes = vri2020_sf %>%
-  dplyr::select(BCLCS_LV_1, BCLCS_LV_2, BCLCS_LV_3, BCLCS_LV_4, BCLCS_LV_5, SHRB_HT, SHRB_CC, HERB_TYPE, HERB_COVER, HERB_PCT, NON_VEG_1, BEC_ZONE, BEC_SZONE, N_LOG_DATE, DEAD_PCT, HRVSTDT, SITE_INDEX, SPEC_CD_1, SPEC_CD_2, SPEC_PCT_1, SPEC_PCT_2, PROJ_HT_1, SPEC_AGE_1, DEAD_PCT, STEM_HA_CD, DEAD_STEMS, NVEG_COV_1)
+Wotton_fuel_class = vri2020_sf%>% 
+  mutate(fuel_type = case_when((BCLCS_LV_1 != "V") ~ 0,
+  (BCLCS_LV_1 == "V" & BCLCS_LV_4 == "TB") ~ 1,
+  (BCLCS_LV_1 == "V" & SPEC_CD_1 == "FD" | SPEC_CD_1 == "FDC" | SPEC_CD_1 == "FDI") ~ 2,
+  (BCLCS_LV_1 == "V" & SPEC_PCT_1 <= 80) ~ 3,
+  (BCLCS_LV_1 == "V" & SPEC_CD_1 == "PA" | SPEC_CD_1 == "PL" | SPEC_CD_1 == "PLC" | SPEC_CD_1 == "PY") ~ 4,
+  (BCLCS_LV_1 == "V" & BCLCS_LV_5 =="SP" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SX" | SPEC_CD_1 == "SW" | SPEC_CD_1 == "S" | BEC_ZONE == "BWBS" | BEC_ZONE == "SWB") ~ 5, TRUE ~ 0))
 
-library(dplyr)
+Wotton_fuel_N = dplyr::filter(vri2020_sf, BCLCS_LV_1 =="N")
+Wotton_fuel_decid = dplyr::filter(vri2020_sf, BCLCS_LV_4=="TB")
+Wotton_fuel_Df = dplyr::filter(vri2020_sf, BCLCS_LV_1 == "V" & SPEC_CD_1 == "FD" | SPEC_CD_1 == "FDC" | SPEC_CD_1 == "FDI")
+Wotton_fuel_MW = dplyr::filter(vri2020_sf, BCLCS_LV_1 == "V" & SPEC_PCT_1 <= 80)
+Wotton_fuel_PI = dplyr::filter(vri2020_sf, BCLCS_LV_1 == "V" & SPEC_CD_1 == "PA" | SPEC_CD_1 == "PL" | SPEC_CD_1 == "PLC" | SPEC_CD_1 == "PY")
+Wotton_fuel_PI = dplyr::filter(vri2020_sf, BCLCS_LV_1 == "V" & BCLCS_LV_5 =="SP" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SX" | SPEC_CD_1 == "SW" | SPEC_CD_1 == "S" | BEC_ZONE == "BWBS" | BEC_ZONE == "SWB")
+#fuel_attributes = vri2020_sf %>%
+# dplyr::select(BCLCS_LV_1, BCLCS_LV_2, BCLCS_LV_3, BCLCS_LV_4, BCLCS_LV_5, SHRB_HT, SHRB_CC, HERB_TYPE, HERB_COVER, HERB_PCT, #NON_VEG_1, BEC_ZONE, BEC_SZONE, N_LOG_DATE, DEAD_PCT, HRVSTDT, SITE_INDEX, SPEC_CD_1, SPEC_CD_2, SPEC_PCT_1, SPEC_PCT_2, PROJ_HT_1, #SPEC_AGE_1, DEAD_PCT, STEM_HA_CD, DEAD_STEMS, NVEG_COV_1)
+#library(dplyr)
 Wotton_fuel_N = 0
 Wotton_fuel_decid = 1
 Wotton_fuel_Df = 2
@@ -329,25 +335,24 @@ Wotton_fuel_MW = 3
 Wotton_fuel_PI = 4
 Wotton_fuel_SP = 5
 
-Wotton_fuel_class = vri2020_sf%>% 
-  mutate(fuel_type = case_when((BCLCS_LV_1 == "N") ~ 0,
-  (BCLCS_LV_1 == "V" & BCLCS_LV_4 = "TB") ~ 1,
-  (BCLCS_LV_1 == "V" & SPEC_CD_1 == "FD" | SPEC_CD_1 == "FDC" | SPEC_CD_1 == "FDI") ~ 2,
-  (BCLCS_LV_1 == "V" & SPEC_PCT_1 <= 80) ~ 3,
-  (BCLCS_LV_1 == "V" & SPEC_CD_1 == "PA" | SPEC_CD_1 == "PL" | SPEC_CD_1 == "PLC" | SPEC_CD_1 == "PY") ~ 4,
-  (BCLCS_LV_1 == "V" & BCLCS_LV_5 =="SP" | SPEC_CD_1 == "SB" | SPEC_CD_1 == "SX" | SPEC_CD_1 == "SW" | SPEC_CD_1 == "S" | BEC_ZONE == "BWBS" | BEC_ZONE == "SWB") ~ 5,
-  TRUE ~ 0))
-
-
-density = vri_sf["LIVE_STEMS"] %>% mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
+density = vri2020_sf["LIVE_STEMS"] %>% mutate(LIVE_STEMS = as.numeric(LIVE_STEMS))
 density = rename(density, density = LIVE_STEMS)
-ggplot(stand) + geom_sf(aes(fill=stand), size = 0.05)
 ggplot(density) + geom_sf(aes(fill=density), size = 0.0005) + scale_fill_viridis_c()
+
+plot(st_geometry(Wotton_fuel_PI), col="brown", alpha=0.7)
+plot(st_geometry(Wotton_fuel_decid), col="green", add=TRUE)
+plot(st_geometry(Wotton_fuel_Df), col="brown", add=TRUE)
+plot(st_geometry(Wotton_fuel_MW), col="blue", add=TRUE)
+plot(st_geometry(Wotton_fuel_PI), col="red", add=TRUE)
+plot(st_geometry(Wotton_fuel_SP), col="yellow", add=TRUE)
+
 ```
 
-```{r, eval=FALSE}
+![](Data/density_vri_sf_ggplot.png)
 
-#### *fwiRaster and sdmc calculated based on daily climate records*
+```{r, eval=FALSE}
+# Need to 
+#### *fwiRaster and samc calculated based on daily climate records*
 
 #### *gfmc and hffmc calculated based on hourly climate records - key to CFFDRSv2.0*
 
@@ -359,13 +364,17 @@ ggplot(density) + geom_sf(aes(fill=density), size = 0.0005) + scale_fill_viridis
 
 # Generating CFFDRS Wildfire Weather Maps
 
-Interpolated climate predictors were assembled as a raster stack and inputted into the fwiRaster function. The 'out="all'" option was applied to produce additional outputs representing for Initial Spread Index (isi), and Build-up Index (bui).
+Raster stack of interpolated climate predictors was assembled and fitted to the fwiRaster function with 'out="all'" option. This produced raster results for Initial Spread Index (isi), and Build-up Index (bui) and other indices required in FBP calculations. This is as far as we couild get and could only generate these CFFDRS outputs for generic landcover rasters; these scores need to be tuned for each fuel type area.
 
-```{r}
+```{r, eval=FALSE}
 temp = raster::raster(temp)
 prec = raster::raster(prec)
 rh = raster::raster(rh)
 ws = raster::raster(ws)
+names(temp) = 'temp'
+names(prec) = 'prec'
+names(rh) = 'rh'
+names(ws) = 'ws'
 stack = stack(temp, rh, ws, prec)
 names(stack)
 fwi_outputs = fwiRaster(stack, out = "all")
@@ -377,4 +386,80 @@ isi = raster(fwi_outputs, layer=8)
 bui = raster(fwi_outputs, layer=9)
 fwi = raster(fwi_outputs, layer=10)
 dsr = raster(fwi_outputs, layer=11)
+
+#define mcF, mcD, ex.mod intermediate functions
+mcF<-function(ffmc){
+  147.2*(101-ffmc)/(59.5+ffmc)}
+mcD<-function(dmc) {
+  20+exp(-(dmc-244.72)/43.43)}
+ex.mod<-function(s1, s2, s3, ffmc, dmc) {
+  exp(s1+s2*log(mcF(ffmc))+s3*mcD(dmc))}
+
+#define stand-adjusted mc function
+#FFMC, DMC, stand, density, season
+samc<-function(ffmc, dmc, stand, density, season) {
+  #Get coefficients
+  CoTr1 <-c(
+    0.7299,0.0202,0.7977,0.8517,0.7391,
+    0.4387,-0.271,0.5065,0.5605,0.4479,
+    -0.2449,-0.9546,-0.1771,-0.1231,-0.2357,
+    0.1348,-0.5749,0.2026,0.2566,0.144,
+    -0.1564,-0.8661,-0.0886,-0.0346,-0.1472,
+    -0.84,-1.5497,-0.7722,-0.7182,-0.8308,
+    0.1601,-0.55,0.2279,0.2819,0.1693,
+    -0.1311,-0.8408,-0.0633,-0.0093,-0.1219,
+    -0.8147,-1.5244,-0.7469,-0.6929,-0.8055)
+  CoTr2 <- c(
+    0.5221,0.6264,0.5042,0.3709,0.4285,
+    0.7133,0.8176,0.6954,0.5621,0.6197,
+    1.0462,1.1505,1.0283,0.895,0.9526,
+    0.8691,0.9734,0.8512,0.7179,0.7755,
+    1.0603,1.1646,1.0424,0.9091,0.9667,
+    1.3932,1.4975,1.3753,1.242,1.2996,
+    0.9495,1.0538,0.9316,0.7983,0.8559,
+    1.1407,1.245,1.1228,0.9895,1.0471,
+    1.4736,1.5779,1.4557,1.3224,1.38)
+  co3 <- 0.002232
+  
+  #Create data frame for pulling coefs
+  AllCo <-data.frame("co1"=CoTr1, "co2"=CoTr2)
+  
+  #Spring and Summer coefs for 'sprummer' model
+  co_sp <- AllCo[1:15,]
+  co_su <- AllCo[16:30,]
+  
+  
+  if(season==1.5) {
+    #spring
+    c1.sprD=co_sp[(density*5-4):(density*5), 1]
+    c2.sprD=co_sp[(density*5-4):(density*5), 2]
+    c1=c1.sprD[stand]
+    c2=c2.sprD[stand]
+    mc.spr=ex.mod(c1, c2, co3, ffmc, dmc)   
+    #summer 
+    c1.sumD=co_su[(density*5-4):(density*5), 1]
+    c2.sumD=co_su[(density*5-4):(density*5), 2]
+    c3=c1.sumD[stand]
+    c4=c2.sumD[stand]
+    mc.sum=ex.mod(c3, c4, co3, ffmc, dmc)  
+    
+    #final 'sprummer' mc calc
+    return(mean(c(mc.spr, mc.sum)))
+    
+    #for all others - spring, summer or fall
+  } else {
+    c1a=AllCo$co1[(season*15-14):(season*15)]
+    c2a=AllCo$co2[(season*15-14):(season*15)]
+    c1b=c1a[(density*5-4):(density*5)]
+    c2b=c2a[(density*5-4):(density*5)]
+    c1c=c1b[stand]
+    c2c=c2b[stand]
+    return(ex.mod(c1c, c2c, co3, ffmc, dmc))
+  }
+}
+
 ```
+
+![](Data/fwi_outputs.png)
+
+# Generating CFFDRS Fire Predicted Behavior Maps
