@@ -28,7 +28,6 @@ library(knitr)
 library(raster)
 library(webdriver)
 library(webshot)
-library(webshot2)
 library(RColorBrewer)
 library(conflicted)
 library(readr)
@@ -50,7 +49,7 @@ library(rasterVis)
 library(curl)
 library(tmap)
 library(tmaptools)
-#webshot::install_phantomjs(force = TRUE)
+webshot::install_phantomjs(force = TRUE)
 knit_hooks$set(webgl = hook_webgl)
 knit_hooks$set(rgl.static = hook_rgl)
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message = FALSE)
@@ -69,7 +68,7 @@ Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/
 
 Figure 1: Tentative Workflow
 
-# Selecting AOI (Okanagan Watershed)
+# User AOI
 
 Two input options for selecting AOI were explored below: 1) uploading AOI boundary file and 2) choosing point location as centre of 10km LxW bounding box. For testing boundary file uploads, we downloaded the Okanagan Watershed boundary (FWA ID:212) from the BC Geographic Warehouse which was extracted from the BC Freshwater Atlas Dataset. The aoi feature layer was imported as a simple feature and transformed into sp and spatVector objects for different processing and compatability options. From this initial scoping exercise, the terra route looks like a powerful pipeline (sf \> terra \> ggmap \> elevatr = tmap/gplot), but still needs some figuring out to integrate with the APIs.
 
@@ -80,7 +79,7 @@ watershed_okanagan_sv = vect(watershed_okanagan_sf)
 ggplot(watershed_okanagan_sf) + geom_sf(alpha=0.1) + coord_sf()
 ```
 
-# Importing Basemaps: Google Cloud Api
+# Basemaps: Google Cloud Api
 
 For potential GUI-widgets and tools, we tested potential base mapping services from [Google Cloud API](https://cloud.google.com/maps-platform/) using the ggmap package and a free API key token set up with personal google account. These required latitude-longitude coordinates as inputs. All data layers were projected to match the Google Pseudo Mercator (EPSG:3857) and then reprojected to CSRS EPSG:3153 for metric analyses. Four basemaps were tested using the API server at a zoom setting of 8 and a latitude and longitude location of -119, 50.0. Still some kinks to work out with the point location input, though seems that this point of interest route is more compatible, especially for working with NASA Power APIs.
 
@@ -126,17 +125,16 @@ writeRaster(rgmaprgbGM, file = "./Data/rgmaprgbGM.tif", format = "GTiff", overwr
 
 gmap_rast = rast(rgmaprgbGM)
 RGB(gmap_rast) = c(1,2,3)
-plot(gmap_rast)
 crs(gmap_rast) = "EPSG:3857"
 crs(watershed_okanagan_sv) = "EPSG:3857"
 st_transform(watershed_okanagan_sf, 3857)
 # plot objects locally
 tm_shape(gmap_rast)+
-  tm_rgb(alpha=0.9)+
+  tm_rgb(alpha=0.8)+
   tm_shape(watershed_okanagan_sf)+
   tm_borders(col="yellow") +
   tm_compass(type = "8star", position = c("left", "top")) +
-  tm_scale_bar(breaks = c(0, 50, 100, 200), text.size = 0.5)+
+  tm_scale_bar(breaks = c(0, 50, 100, 200), text.size = 0.8)+
   tm_grid()
 ```
 
