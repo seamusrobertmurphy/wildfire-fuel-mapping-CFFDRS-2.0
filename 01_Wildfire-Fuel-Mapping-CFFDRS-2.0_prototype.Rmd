@@ -28,6 +28,7 @@ library(knitr)
 library(raster)
 library(webdriver)
 library(webshot)
+library(webshot2)
 library(RColorBrewer)
 library(conflicted)
 library(readr)
@@ -49,11 +50,14 @@ library(rasterVis)
 library(curl)
 library(tmap)
 library(tmaptools)
-webshot::install_phantomjs(force = TRUE)
 knit_hooks$set(webgl = hook_webgl)
 knit_hooks$set(rgl.static = hook_rgl)
 knitr::opts_chunk$set(echo = TRUE, warning=FALSE, error=FALSE, message = FALSE)
 set.seed(23)
+#for git set-up
+#library(usethis)
+#use_git_config(user.name = "seamusrobertmurphy", user.email = "seamusrobertmurphy@gmail.com")
+#webshot::install_phantomjs(force = TRUE)
 ```
 
 ## Action {.unnumbered}
@@ -68,7 +72,7 @@ Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/
 
 Figure 1: Tentative Workflow
 
-# User AOI
+# Selecting AOI (Okanagan Watershed)
 
 Two input options for selecting AOI were explored below: 1) uploading AOI boundary file and 2) choosing point location as centre of 10km LxW bounding box. For testing boundary file uploads, we downloaded the Okanagan Watershed boundary (FWA ID:212) from the BC Geographic Warehouse which was extracted from the BC Freshwater Atlas Dataset. The aoi feature layer was imported as a simple feature and transformed into sp and spatVector objects for different processing and compatability options. From this initial scoping exercise, the terra route looks like a powerful pipeline (sf \> terra \> ggmap \> elevatr = tmap/gplot), but still needs some figuring out to integrate with the APIs.
 
@@ -79,7 +83,7 @@ watershed_okanagan_sv = vect(watershed_okanagan_sf)
 ggplot(watershed_okanagan_sf) + geom_sf(alpha=0.1) + coord_sf()
 ```
 
-# Basemaps: Google Cloud Api
+# Importing Basemaps: Google Cloud Api
 
 For potential GUI-widgets and tools, we tested potential base mapping services from [Google Cloud API](https://cloud.google.com/maps-platform/) using the ggmap package and a free API key token set up with personal google account. These required latitude-longitude coordinates as inputs. All data layers were projected to match the Google Pseudo Mercator (EPSG:3857) and then reprojected to CSRS EPSG:3153 for metric analyses. Four basemaps were tested using the API server at a zoom setting of 8 and a latitude and longitude location of -119, 50.0. Still some kinks to work out with the point location input, though seems that this point of interest route is more compatible, especially for working with NASA Power APIs.
 
@@ -125,16 +129,17 @@ writeRaster(rgmaprgbGM, file = "./Data/rgmaprgbGM.tif", format = "GTiff", overwr
 
 gmap_rast = rast(rgmaprgbGM)
 RGB(gmap_rast) = c(1,2,3)
+plot(gmap_rast)
 crs(gmap_rast) = "EPSG:3857"
 crs(watershed_okanagan_sv) = "EPSG:3857"
 st_transform(watershed_okanagan_sf, 3857)
 # plot objects locally
 tm_shape(gmap_rast)+
-  tm_rgb(alpha=0.8)+
+  tm_rgb(alpha=0.9)+
   tm_shape(watershed_okanagan_sf)+
   tm_borders(col="yellow") +
   tm_compass(type = "8star", position = c("left", "top")) +
-  tm_scale_bar(breaks = c(0, 50, 100, 200), text.size = 0.8)+
+  tm_scale_bar(breaks = c(0, 50, 100, 200), text.size = 0.5)+
   tm_grid()
 ```
 
@@ -235,41 +240,56 @@ temp = terra::rast('NETCDF:"./Data/temp.nc"')
 prec = terra::rast('NETCDF:"./Data/precip.nc"')
 rh = terra::rast('NETCDF:"./Data/rh.nc"')
 ws = terra::rast('NETCDF:"./Data/ws.nc"')
+
+temp_ext = (ext(gmap_rast))
+ext(temp) <- temp_ext
 temp = mean(temp)
-prec = mean(prec)
-rh = mean(rh)
-ws = mean(ws)
-names(temp) = 'temp'
-names(prec) = 'prec'
-names(rh) = 'rh'
-names(ws) = 'ws'
-
-
 crs(temp) = "EPSG:3857"
+
+prec_ext = (ext(gmap_rast))
+ext(prec) <- prec_ext
+prec = mean(prec)
 crs(prec) = "EPSG:3857"
+
+rh_ext = (ext(gmap_rast))
+ext(rh) <- rh_ext
+rh = mean(rh)
 crs(rh) = "EPSG:3857"
+
+ws_ext = (ext(gmap_rast))
+ext(ws) <- ws_ext
+ws = mean(ws)
 crs(ws) = "EPSG:3857"
 
-temp_ext = ext(temp)
-
-project(temp_ext, crs
-
-temp_raster = raster(temp)
-writeRaster(temp_raster, file = "./Data/temp.tif", format = "GTiff", overwrite = TRUE)
-
-
-terra::project(temp, gmap_rast)
-
-
-#raster::raster(temp)
-#raster::raster(prec)
-#raster::raster(rh)
-#raster::raster(ws)
-#raster::writeRaster(temp, file = "./Data/temp", format = "GTiff", overwrite = TRUE)
-
-st_transform(watershed_okanagan_sf, crs = crs(temp))
 tm_shape(temp)+
   tm_raster(style= "cont", title="Temperature (2m AGL)")+
+  tm_layout(legend.outside = TRUE)+
+  tm_shape(watershed_okanagan_sf)+
+  tm_borders(col="black", lwd = 2) +
+  tm_compass(type = "8star", position = c("left", "top")) +
+  tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
+  tm_grid()
+
+tm_shape(prec)+
+  tm_raster(style= "cont", title="Precipitation (mm^3/day)")+
+  tm_layout(legend.outside = TRUE)+
+  tm_shape(watershed_okanagan_sf)+
+  tm_borders(col="black", lwd = 2) +
+  tm_compass(type = "8star", position = c("left", "top")) +
+  tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
+  tm_grid()
+
+tm_shape(rh)+
+  tm_raster(style= "cont", title="Relative Humidity (NCDC/day 2m AGL)")+
+  tm_layout(legend.outside = TRUE)+
+  tm_shape(watershed_okanagan_sf)+
+  tm_borders(col="black", lwd = 2) +
+  tm_compass(type = "8star", position = c("left", "top")) +
+  tm_scale_bar(breaks = c(0, 25, 50, 100), text.size = 0.5)+
+  tm_grid()
+
+tm_shape(ws)+
+  tm_raster(style= "cont", title="Wind Speed (m/s 10m AGL)")+
   tm_layout(legend.outside = TRUE)+
   tm_shape(watershed_okanagan_sf)+
   tm_borders(col="black", lwd = 2) +
@@ -281,7 +301,7 @@ tm_shape(temp)+
 
 # Importing VRI Data
 
-The VRI dataset was downloaded from imapBC as a shapefile.shp and transformed into simple feature for processing oeprations using sf and dplyr functions. For CFFDRS data requirements, we consulted the two package-provied sample datasets 'test_fwi' and 'test_fpb' presented below:
+VRI data was downloaded from imapBC with AOI selected by hand. The data was imported as shapefile.shp and transformed into simple feature for processing. The CFFDRS package has some data formatting requirements. It offers a sample dataset for referring to, including dataframes and raster inputs needed for generating CFFDRS Fire Weather Index maps and CFFDRS Fire Predicted Behaviour maps - see 'test_fwi' and 'test_fpb' presented below.
 
 ```{r}
 library(cffdrs)
@@ -289,12 +309,13 @@ print(as_tibble(test_fwi), n = 10)
 print(as_tibble(test_fbp), n = 10)
 ```
 
-Wotton and Beverly's model of stand-adjusted fine fuel moisture content requires five predictor variables, two of which were extracted directly from spatial layers of the the VRI dataset including stand-type ('SPEC_CD_1 ==?' & 'SPEC_PCT_1 \> 0.80)BCLCS_LV_1,
+Wotton and Beverly's model of stand-adjusted fine fuel moisture content requires five predictor variables.. Two of these predictors were extracted the the VRI dataset including stand type ('SPEC_CD_1') and stand density (LIVE_STEMS). Applying the MFLNRO VRI-layer fuel-typing algorithm, rough scale criteria were used in a filtering process to classify fuel categories similar to those used in Wotton and Beverley's model. Much more VRI-filtering is possible with the dataset, but not sure if this approach is what NRC are aiming towards especially considering this work was covered by Perrakis et al in 2015.
 
 ```{r, fig.show='hold', out.width="50%", eval=FALSE}
 vri2020_sf = st_read("./Data/BCGW_7113060B_1645786298548_3276/VEG_COMP_LYR_R1_POLY/VEG_R1_PLY_polygon.shp")
-st_crs(watershed_okanagan) = 3005
-vri2020_sf = st_intersection(st_make_valid(vri2020_sf), watershed_okanagan)
+st_crs(vri2020_sf) = 3857
+
+vri2020_sf = st_intersection(st_make_valid(vri2020_sf), watershed_okanagan_sf)
 str(vri2020_sf)
 
 fuel_attributes = vri2020_sf %>%
