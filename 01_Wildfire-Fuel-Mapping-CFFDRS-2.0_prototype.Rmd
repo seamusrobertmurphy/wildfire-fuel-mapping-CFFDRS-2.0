@@ -88,7 +88,6 @@ ggplot(watershed_okanagan_sf) + geom_sf(alpha=0.1) + coord_sf()
 For potential GUI-widgets and tools, we tested potential base mapping services from [Google Cloud API](https://cloud.google.com/maps-platform/) using the ggmap package and a free API key token set up with personal google account. These required latitude-longitude coordinates as inputs. All data layers were projected to match the Google Pseudo Mercator (EPSG:3857) and then reprojected to CSRS EPSG:3153 for metric analyses. Four basemaps were tested using the API server at a zoom setting of 8 and a latitude and longitude location of -119, 50.0. Still some kinks to work out with the point location input, though seems that this point of interest route is more compatible, especially for working with NASA Power APIs.
 
 ```{r, eval=FALSE}
-register_google(key = 'AIzaSyDbjpyUjJp3VInMOqebU9yp2zff5hA-zBM')
 gmap = get_map(location = c(-119.7, 50.0), maptype = "hybrid", source = "google", crop = FALSE, zoom = 8)
 gmap1 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "satellite", source = "google", zoom = 8))
 gmap2 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "toner-lite", zoom = 8))
