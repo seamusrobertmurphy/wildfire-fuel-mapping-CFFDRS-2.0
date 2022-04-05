@@ -1,7 +1,7 @@
 # Wildfire-Mapping-CFFDRS-2.0 Prototype
 Proof of Concept:
 ================
-CabinGIS
+CabinGIS (see latest draft here: https://github.com/seamusrobertmurphy/Wildfire-Fuel-Mapping-CFFDRS-2.0/blob/main/01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.pdf)
 24/02/2022
 
 -   [Action](#action)
