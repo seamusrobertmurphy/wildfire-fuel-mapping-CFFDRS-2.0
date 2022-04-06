@@ -11,6 +11,7 @@ output:
     df_print: tibble
     latex_engine: xelatex
   zotero: TRUE
+  
 bibliography: references.bib
 ---
 
@@ -66,7 +67,7 @@ Building on the momentum and ideas of our last meeting, the following pipeline w
 
 -   NRC Grant: <https://www.ic.gc.ca/eic/site/101.nsf/eng/00157.html>
 
-Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) (\@wang2017cffdrs; \@van1985equations; \@van1987development), we developed rasters of forest fuel moisture code and wildfire weather indices (Table 1) that were used to fit the stand-adjusted fine-fuel model (\@wotton2007stand) applied to vegetation rasters classified according to 16 fuel classes of the BC forest fuel typing algorithm ( \@perrakis2018british). REeult rasters were then used to fit the Canadian Forest Fire Behaviour Prediction model from which we drafted raster maps representing Head Fire Index (HFI) and Fire Intensity maps (FI) (Figure 1) for the Okanagan Watershed Basin for the day of June 30th 2021.
+Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/cffdrs.pdf) [@wang2017cffdrs; @van1985equations; @van1987development], we developed rasters of forest fuel moisture code and wildfire weather indices (Table 1) that were used to fit the stand-adjusted fine-fuel model [@wotton2007stand] applied to vegetation rasters classified according to 16 fuel classes of the BC forest fuel typing algorithm [@perrakis2018british]. Derived rasters were then used to fit the Canadian Forest Fire Behaviour Prediction model from which we drafted raster maps representing Head Fire Index (HFI) and Fire Intensity maps (FI) (Figure 1) for the Okanagan Watershed Basin for the day of June 30th 2021.
 
 ![](Data/CFFDRS%20Prototype.png)
 
@@ -462,3 +463,5 @@ samc<-function(ffmc, dmc, stand, density, season) {
 ![](Data/fwi_outputs.png)
 
 # Generating CFFDRS Fire Predicted Behavior Maps
+
+## References
