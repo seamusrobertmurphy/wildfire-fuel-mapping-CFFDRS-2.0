@@ -61,7 +61,7 @@ set.seed(23)
 #webshot::install_phantomjs(force = TRUE)
 ```
 
-## Action {.unnumbered}
+## Introduction: Objective {.unnumbered}
 
 Building on the momentum and ideas of our last meeting, the following pipeline was attempted to produce the wildfire fuel mapping outputs described in the NRC grant "High-Resolution Mapping":
 
@@ -73,7 +73,21 @@ Using the new [cffdrs R-package](https://cran.r-project.org/web/packages/cffdrs/
 
 Figure 1: Tentative Workflow
 
-# Selecting AOI (Okanagan Watershed)
+# Introduction: Inputs
+
+Adopting a similar approach to the MFLNRO Fuel Typing Framework (2015; 2019), a fuel typing algorithm was developed using five publicly available spatial datasets:
+
+-   VRI
+
+-   Consolidated Cutblocks
+
+-   Fire Damage
+
+-   Mountain Pine Beetle Damage
+
+-   National Fuel Type Layer
+
+# Methods: Selecting AOI (Okanagan Watershed)
 
 Two input options for selecting AOI were explored below: 1) uploading AOI boundary file and 2) choosing point location as centre of 10km LxW bounding box. For testing boundary file uploads, we downloaded the Okanagan Watershed boundary (FWA ID:212) from the BC Geographic Warehouse which was extracted from the BC Freshwater Atlas Dataset. The aoi feature layer was imported as a simple feature and transformed into sp and spatVector objects for different processing and compatability options. From this initial scoping exercise, the terra route looks like a powerful pipeline (sf \> terra \> ggmap \> elevatr = tmap/gplot), but still needs some figuring out to integrate with the APIs.
 
