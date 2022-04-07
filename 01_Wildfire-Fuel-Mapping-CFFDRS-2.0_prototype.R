@@ -27,21 +27,21 @@ aoi = aoi[1, "Okanagan_Watershed"]
 base::plot(aoi)
 
 # BC by Fire Districts
-aoi_bc_fire_centres = sf::read_sf("./Data/fire-centres/fire-centres-bc/DRPMFFRCNT_polygon.shp")
-aoi_bc_fire_centres = dplyr::rename(aoi_bc_fire_centres, BC_FIRE_CENTRES = MFFRCNTRNM)
-aoi_bc_fire_centres = aoi_bc_fire_centres["BC_FIRE_CENTRES"]
-base::plot(aoi_bc_fire_centres)
+#aoi_bc_fire_centres = sf::read_sf("./Data/fire-centres/fire-centres-bc/DRPMFFRCNT_polygon.shp")
+#aoi_bc_fire_centres = dplyr::rename(aoi_bc_fire_centres, BC_FIRE_CENTRES = MFFRCNTRNM)
+#aoi_bc_fire_centres = aoi_bc_fire_centres["BC_FIRE_CENTRES"]
+#base::plot(aoi_bc_fire_centres)
 
 # Kamloops Fire Centre District
-aoi = sf::read_sf("./Data/fire-centres/fire-centres-kamloops/DRPMFFRCNT_polygon.shp")
-aoi = dplyr::rename(aoi, Kamloops_Fire_Centre = MFFRCNTRNM)
-aoi = aoi[1, "Kamloops_Fire_Centre"]
-base::plot(aoi)
+#aoi = sf::read_sf("./Data/fire-centres/fire-centres-kamloops/DRPMFFRCNT_polygon.shp")
+#aoi = dplyr::rename(aoi, Kamloops_Fire_Centre = MFFRCNTRNM)
+#aoi = aoi[1, "Kamloops_Fire_Centre"]
+#base::plot(aoi)
 
-watersheds = sf::read_sf("./Data/hydrology/watersheds/watersheds_bc/watersheds_bc.shp")
-watersheds_kamloopsFC = sf::st_intersection(sf::st_make_valid(watersheds), aoi)
-plot(st_geometry(watersheds_kamloopsFC))
-plot(st_geometry(watersheds))
+#watersheds = sf::read_sf("./Data/hydrology/watersheds/watersheds_bc/watersheds_bc.shp")
+#watersheds_kamloopsFC = sf::st_intersection(sf::st_make_valid(watersheds), aoi)
+#plot(st_geometry(watersheds_kamloopsFC))
+#plot(st_geometry(watersheds))
 
 
 cutblocks = sf::read_sf("./Data/cutblocks/cutblocks_kamloops_fire_centre/CNS_CUT_BL_polygon.shp")
@@ -63,10 +63,11 @@ mpb_kamloopsFC = mpb_kamloopsFC %>%
 
 
 vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
-vri_ok_2020$N_LO
 vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE")]
 vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
 glimpse(vri_ok_2020)
+
+#vri_ok_2020$SPEC_CD_2
 
 vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
 vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
@@ -90,10 +91,6 @@ summary.factor(vri_ok_2020$BCLCS_LV_5)
 summary.factor(vri_ok_2020$SPEC_CD_1)
 summary.factor(vri_ok_2020$N_LOG_DIST)
 summary(vri_ok_2020$SPEC_PCT_1)
-
-summary.factor(vri_ok_2020$fuel_C1)
-
-
 
 
 
@@ -137,13 +134,27 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C2 = case_when(
     SPEC_PCT_1 >= 20 & SPEC_CD_1=="SW" & is.na(HRVSTDT) & BEC_ZONE!="BWBS" & BEC_ZONE!="CWH" & BEC_ZONE!="ICH" & BCLCS_LV_5=="DE" |
     SPEC_PCT_1 >= 20 & SPEC_CD_1=="S" & HRVSTDT<=20140000 & BEC_ZONE!="BWBS" & BEC_ZONE!="CWH" & BEC_ZONE!="ICH" & BCLCS_LV_5=="DE" |
     SPEC_PCT_1 >= 20 & SPEC_CD_1=="S" & is.na(HRVSTDT) & BEC_ZONE!="BWBS" & BEC_ZONE!="CWH" & BEC_ZONE!="ICH" & BCLCS_LV_5=="DE" |
-    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SB" & BEC_ZONE=="BWBS" & BCLCS_LV_5=="DE" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SB" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SB" & HRVSTDT<=20140000& BCLCS_LV_5=="OP" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SB" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SB" & is.na(HRVSTDT) & BCLCS_LV_5=="OP" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SS" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SS" & HRVSTDT<=20140000& BCLCS_LV_5=="OP" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" |
+    SPEC_PCT_1 >= 20 & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="OP" |
     SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="BL" |
     SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="B" |
     SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="PL" |
     SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="P" |
     SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="PLI" |
-    SPEC_PCT_1 <= 20 & BCLCS_LV_5=="OP" & DEAD_PCT >50 & N_LOG_DATE <= 20150000 & N_LOG_DIST==
+    SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="BL" |
+    SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="B" |
+    SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="PL" |
+    SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="P" |
+    SPEC_PCT_1 <= 20 & SPEC_CD_1=="SE" & HRVSTDT<=20140000 & BCLCS_LV_5=="DE" & SPEC_CD_2=="PLI" |
+    SPEC_PCT_1 >= 80 & SPEC_CD_1=="PL" & HRVSTDT >= 20130000 & BCLCS_LV_5=="OP" & N_LOG_DIST=="IBM" & N_LOG_DATE <=2015000 & DEAD_PCT >50 |
+    SPEC_PCT_1 >= 80 & SPEC_CD_1=="PL" & HRVSTDT >= 20130000 & BCLCS_LV_5=="DE" & N_LOG_DIST=="IBM" & N_LOG_DATE <=2015000 & DEAD_PCT <50 |
+    
     
 ))
 
