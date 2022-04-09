@@ -254,11 +254,13 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1=="BG" & SPEC_PCT_1 >=80 & SPEC_CD_2=="SE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1=="BG" & SPEC_PCT_1 >=80 & SPEC_CD_2=="SW" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1== "BG" & SPEC_PCT_1 >=80 & SPEC_CD_2=="S" |
-    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1=="H*" & HRVSTDT <= 2014000 & BCLCS_LV_5="DE" & PROJ_HT_1 >=15 & PROJ_HT_1 <=60 & SPEC_PCT_1 >=80 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1=="H*" & HRVSTDT <= 2014000 & BCLCS_LV_5="DE" & PROJ_HT_1 >=15 & PROJ_HT_1 <=15 & PROJ_HT_1 >=4  & SPEC_PCT_1 >=80 & BCLCS_LV_5=="DE" |
+    PROJ_HT_1>=4 & BCLCS_LV_5=="OP" & BEC_ZONE!=CWH & BEC_ZONE!="CDF" & BEC_ZONE!="BWBS" & BEC_ZONE!="SWB" & HRVSTDT <= 20130000 |
+    PROJ_HT_1>=4 & BCLCS_LV_5=="OP" & BEC_ZONE!=CWH & BEC_ZONE!="CDF" & BEC_ZONE!="BWBS" & BEC_ZONE!="SWB" & is.na(HRVSTDT) |
+    SPEC_CD_1=="SE" & HRVSTDT <= 20100000 & BCLCS_LV_5=="OP" |
+    SPEC_CD_1=="SE" & is.na(HRVSTDT) & BCLCS_LV_5=="OP" |
     
-    PROJ_HT_1<=4 & BCLCS_LV_5=="OP" & BEC_ZONE!=CWH & BEC_ZONE!="CDF"
   vri_ok_2020$PROJ_HT_1
 
     
