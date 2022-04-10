@@ -244,6 +244,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C2 = case_when(
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & is.na(HRVSTDT) & is.na(SPEC_CD_1) & HRVSTDT <=19950000 & BEC_ZONE=="SWB" |
+    ESSF
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "d*" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="IDF" & BEC_SZONE == "w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="MS" |
