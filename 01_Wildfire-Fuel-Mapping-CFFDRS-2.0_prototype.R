@@ -379,7 +379,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<=2013000 & PROJ_HT_1 >=12 & SPEC_CD_2=="B*" & N_LOG_DIST=="IBM" & N_LOG_DATE < 20150000 & BCLCS_LV_5=="OP" & DEAD_PCT < 25 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & PROJ_HT_1 >=12 & SPEC_CD_2=="B*" & N_LOG_DIST=="IBM" & N_LOG_DATE < 20150000 & BCLCS_LV_5=="OP" & DEAD_PCT < 25 |
     
-    
+    ###############################
     
         BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1== "BG" & SPEC_PCT_1 >=80 & SPEC_CD_2=="S" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" SPEC_CD_1=="H*" & HRVSTDT <= 2014000 & BCLCS_LV_5="DE" & PROJ_HT_1 >=15 & PROJ_HT_1 <=60 & SPEC_PCT_1 >=80 & BCLCS_LV_5=="DE" |
