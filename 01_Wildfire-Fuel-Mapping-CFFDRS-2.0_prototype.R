@@ -70,10 +70,11 @@ mpb_kamloopsFC = mpb_kamloopsFC %>%
 ## FUEL TYPING ALGORITHM (Perrakis et al 2015)
 # Import VRI current and historical datasets
 vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
-vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE")]
+vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE")]
 vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
 glimpse(vri_ok_2020)
 
+vri_ok_2020$NP_CODE
 
 vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
 vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
@@ -85,6 +86,9 @@ vri_ok_2020$SPEC_CD_2 = as.factor(vri_ok_2020$SPEC_CD_2)
 vri_ok_2020$BEC_ZONE = as.factor(vri_ok_2020$BEC_ZONE)
 vri_ok_2020$BEC_SZONE = as.factor(vri_ok_2020$BEC_SZONE)
 vri_ok_2020$N_LOG_DIST = as.factor(vri_ok_2020$N_LOG_DIST)
+vri_ok_2020$LAND_CD_1 = as.factor(vri_ok_2020$LAND_CD_1)
+vri_ok_2020$INV_STD_CD = as.factor(vri_ok_2020$INV_STD_CD)
+vri_ok_2020$NP_CODE = as.factor(vri_ok_2020$NP_CODE)
 vri_ok_2020$HRVSTDT = as.numeric(vri_ok_2020$HRVSTDT)
 vri_ok_2020$LIVE_STEMS = as.numeric(vri_ok_2020$LIVE_STEMS)
 vri_ok_2020$DEAD_STEMS = as.numeric(vri_ok_2020$DEAD_STEMS)
@@ -1324,10 +1328,190 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="P" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="w*" ~ "1" )
   )
 
+
+vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_D1D2 = case_when(
+  BCLCS_LV_1=="U" & BCLCS_LV_4=="TB" |
+    is.na(BCLCS_LV_1) & BCLCS_LV_4=="TB" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="SL" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="SL" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="SL" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="ST" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="ST" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="ST" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HE" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HE" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HE" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HF" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HF" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="HF" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & is.na(LAND_CD_1) & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & is.na(LAND_CD_1) & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & is.na(LAND_CD_1) & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="BY" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="BM" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & LAND_CD_1=="BL" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & is.na(NP_CODE) & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & is.na(NP_CODE) & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & is.na(NP_CODE) & BEC_ZONE=="ICH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & is.na(NP_CODE) & BEC_ZONE=="BAFA" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="11" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="11" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="11" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="12" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="12" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="12" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="13" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="13" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE=="13" & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & !is.na(SPEC_CD_1) & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & !is.na(SPEC_CD_1) & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & !is.na(SPEC_CD_1) & BEC_ZONE=="ICH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & !is.na(SPEC_CD_1) & BEC_ZONE=="BAFA" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="BAFA" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT>19960000 & HRVSTDT<20120000 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT>19960000 & HRVSTDT<20120000 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT>19960000 & HRVSTDT<20120000 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT>19960000 & HRVSTDT<20120000 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="C*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="C*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="C*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="C*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE<26 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="F*" & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
+
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BCLCS_LV_4=="TB" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BCLCS_LV_4=="TB" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BCLCS_LV_4=="TM" & SPEC_PCT_1>80 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="H*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="H*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="C*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="C*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y*" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y*" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="H*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="H*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="C*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="C*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y*" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y*" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
+
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SS" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SE" & HRVSTDT<20100000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SE" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & CR_CLOSURE<26 & SPEC_PCT_1>80 & PROJ_HT_1>=4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & HRVSTDT<20140000 & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="F*" & is.na(HRVSTDT) & SPEC_PCT_1>80 & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & HRVSTDT<20130000 & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & is.na(HRVSTDT) & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & HRVSTDT<20130000 & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & is.na(HRVSTDT) & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="CDF" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & HRVSTDT<20130000 & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & is.na(HRVSTDT) & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & HRVSTDT<20130000 & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & is.na(HRVSTDT) & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & HRVSTDT<20130000 & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="PL" & is.na(HRVSTDT) & SPEC_PCT_1>80 & BCLCS_LV_5=="SP" & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
+    
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & BCLCS_LV_2=="L" & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & is.na(BCLCS_LV_2) & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & BCLCS_LV_2=="L" & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & is.na(BCLCS_LV_2) & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & BCLCS_LV_2=="L" & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="ICH" |
+    BCLCS_LV_1=="N" & is.na(HRVSTDT) & is.na(BCLCS_LV_2) & BCLCS_LV_3!="A" & !is.na(SPEC_CD_1) & BEC_ZONE=="ICH" |
+    
+    BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="BAFA" |
+    
+    BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="CWH" |
+    BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="MH" |
+    BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="ICH" ~ "1" ) 
+  )
     
     
+vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M1M2 = case_when(
+  
     
-summary.factor(vri_ok_2020$BCLCS_LV_4)
+    
+        
+summary.factor(vri_ok_2020$BCLCS_LV_3)
 
 
 
