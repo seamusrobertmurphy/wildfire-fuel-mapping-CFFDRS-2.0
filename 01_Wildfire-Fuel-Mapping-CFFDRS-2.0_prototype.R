@@ -74,8 +74,6 @@ vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_
 vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
 glimpse(vri_ok_2020)
 
-vri_ok_2020$NP_CODE
-
 vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
 vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
 vri_ok_2020$BCLCS_LV_3 = as.factor(vri_ok_2020$BCLCS_LV_3)
@@ -107,9 +105,8 @@ summary.factor(vri_ok_2020$N_LOG_DIST)
 
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_N = case_when(
-  BCLCS_LV_1 == "N" ~ "1",
-  BCLCS_LV_1 == "U" ~ "1",
-  BCLCS_LV_1 == "V" ~ "0")
+  BCLCS_LV_1 == "N" | 
+    BCLCS_LV_1 == "U" ~ "1" ) 
   )
 
 
@@ -248,8 +245,8 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C2 = case_when(
     SPEC_PCT_1 >=80 & SPEC_CD_1=="PJ" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1 >=12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & DEAD_PCT<50 & DEAD_PCT>25 |
     SPEC_PCT_1 >=80 & SPEC_CD_1=="P" & HRVSTDT<=20130000 & BCLCS_LV_5=="DE" & PROJ_HT_1 >=12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & DEAD_PCT<50 & DEAD_PCT>25 |
     SPEC_PCT_1 >=80 & SPEC_CD_1=="P" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1 >=12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & DEAD_PCT<50 & DEAD_PCT>25 |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT<=1995000 & BEC_ZONE=="BWBS" ~ "1" )
-)
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT<=1995000 & BEC_ZONE=="BWBS" ~ "1" ) 
+  )
 
 
 
@@ -755,7 +752,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="P" & SPEC_CD_2=="S*" & HRVSTDT<20130000 & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="ICH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="P" & SPEC_CD_2=="S*" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="ICH" |
     
-
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & SPEC_CD_2=="B*" & HRVSTDT<20130000 & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & SPEC_CD_2=="B*" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & SPEC_CD_2=="B*" & HRVSTDT<20130000 & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="MH" |
@@ -790,7 +786,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="P" & SPEC_CD_2=="B*" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="MH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="P" & SPEC_CD_2=="B*" & HRVSTDT<20130000 & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="ICH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="P" & SPEC_CD_2=="B*" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="ICH" |
-    
     
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="T*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="T*" |
@@ -1881,31 +1876,45 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_O1 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT<20130000 & HRVSTDT>19960000 & (BEC_ZONE=="PP" | BEC_ZONE=="MS" | BEC_ZONE=="BG" | BEC_ZONE=="IDF") ~ "1" ) 
   )
 
+vri_ok_2020 = vri_ok_2020 %>% 
+  dplyr::mutate(fueltype = case_when(
+    fuel_N=="1" ~ "N",
+    fuel_C1=="1" ~ "C1",
+    fuel_C2=="1" ~ "C2",
+    fuel_C3=="1" ~ "C3",
+    fuel_C4=="1" ~ "C4",
+    fuel_C5=="1" ~ "C5",
+    fuel_C6=="1" ~ "C6",
+    fuel_C7=="1" ~ "C7",
+    fuel_D1D2=="1" ~ "D1/2",
+    fuel_M1M2=="1" ~ "M1/2",
+    fuel_M3M4=="1" ~ "M3/4",
+    fuel_S1=="1" ~ "S1",
+    fuel_S2=="1" ~ "S2",
+    fuel_S3=="1" ~ "S3",
+    fuel_O1=="1" ~ "O1a/b" )
+    )
 
-    
-    
-    
-    
-    
-    
-    
-    
-    
+
+vri_ok_2020 = vri_ok_2020 %>% 
+  dplyr::mutate(fire_centre = case_when(
+    Okanagan_Watershed!="NA" ~ "Kamloops" ) 
+    )
   
-    
-    
+vri_ok_2020 = vri_ok_2020 %>% 
+  dplyr::mutate(watershed = case_when(
+    Okanagan_Watershed!="NA" ~ "Okanagan" ) 
+    )
+
+vri_ok_2020 = vri_ok_2020 %>% 
+  dplyr::select(-c(1:24))
+
+
+glimpse(vri_ok_2020)
   
-    
-    
+years_since_harvest |
+    vri_2020_2019_2018_2017
   
-        
-
-
-summary.factor(vri_ok_2020$INV_STD_CD)
-
-
-
-
 
 
 
