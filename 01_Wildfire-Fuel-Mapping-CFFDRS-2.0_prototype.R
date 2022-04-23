@@ -23,6 +23,42 @@ library(lintr)
 library(RColorBrewer)
 conflict_prefer("mutate", "dplyr")
 
+library(devtools)
+library(lidR)
+library(mapview)
+library(rgl)
+library(pandocfilters)
+library(rmarkdown)
+library(formatR)
+library(gitignore)
+library(tinytex)
+library(knitr)
+library(raster)
+library(webdriver)
+library(webshot)
+library(webshot2)
+library(RColorBrewer)
+library(conflicted)
+library(readr)
+library(tibble)
+library(grid)
+library(sf)
+library(dplyr)
+library(raster)
+library(terra)
+library(rgdal)
+library(utils)
+library(cffdrs)
+library(ncdf4)
+library(elevatr)
+library(ggplot2)
+library(ggmap)
+library(latticeExtra)
+library(rasterVis)
+library(curl)
+library(tmap)
+library(tmaptools)
+
 # Run static linting of following script file
 lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
@@ -2341,6 +2377,8 @@ vri_ok_2020$week_ending = as.Date(
   vri_ok_2020$week_ending, format = "%Y/%m/%d")
 class(vri_ok_2020$week_ending)
 #saveRDS(vri_ok_2020, "wildfire_cabin_df_v1")
+#pal = colorBin(palette="OrRd", 9, domain = wildfire_cabin_df_v1$fueltype)
+
 map_interactive = wildfire_cabin_df_v1 %>% 
   st_transform(crs = "+init=epsg:4326") %>% 
   leaflet() %>%
@@ -2351,11 +2389,59 @@ map_interactive = wildfire_cabin_df_v1 %>%
               opacity = 1,
               fillOpacity = 0.7,
               fillColor = ~ pal(fueltype),
-              )
+              highlightOptions = highlightOptions(weight = 5,
+                                                  fillOpacity = 1,
+                                                  color = "black",
+                                                  opacity = 1,
+                                                  bringToFront = TRUE))
 
 ## Generate Panel 2 indicator: Wildfire Weather Index Layer (CFFDRS 2022)
-climate_vars = vroom("./Data/climate/power_nasa_kelowna.csv")
-climate_vars_sf = st_as_sf(climate_vars, coords = c("LAT", "LON"))
-raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=20, crs = "EPSG:3005")
+climate_vars = read.csv("./Data/climate/nasa_okanagan_202105-202108.csv")
+climate_vars_sf = st_as_sf(climate_vars, coords = c("LON", "LAT")) #climate_vars_sf_centroid_wgs84 = st_transform(climate_vars_sf_centroid, "EPSG:4326")
+climate_vars_sf = st_set_crs(climate_vars_sf, "EPSG:4326") # set CRS
+climate_vars_projected = st_transform(climate_vars_sf, "EPSG:3005")
+raster_template = rast(ext(climate_vars_projected), res=100 , crs = st_crs(climate_vars_projected)$wkt)  #raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=30, crs = 4326)
+
+temp = climate_vars_projected["T2M"]
+temp = dplyr::rename(temp, temp = T2M)
+temp_rast = terra::rasterize(vect(temp), raster_template, field = "temp", fun=mean)
+temp = raster::raster(temp_rast)
+raster::writeRaster(temp, filename = "./Data/climate/temp.tif", overwrite=T)
+temp = raster::raster("./Data/climate/temp.tif")
+
+head(temp)
+head(temp_rast)
+head(climate_vars_sf)
+head(climate_vars_projected)
+
+plot(temp)
 
 
+raster_template = rast(ext(aoi_sf), resolution = 100, crs = st_crs(aoi_sf)$wkt) # template for rasterization
+species_class_rast = terra::rasterize(vect(vri_species_aoi), raster_template, field = "species_class", touches = TRUE)
+species_class_raster = raster::raster(species_class_rast)
+writeRaster(species_class_raster, filename = "./Data/Raster_Covariates/UnMasked/species_class_raster.tif", overwrite=TRUE)
+species_class_raster = raster::raster("./Data/Raster_Covariates/UnMasked/species_class_raster.tif")
+plot(species_class_rast, main = "species_class_raster")
+
+
+rh = climate_vars_sf["RH2M"]
+rh = dplyr::rename(rh, rh = RH2M)
+rh = rasterize(rh, raster_template, res=30)
+ws = climate_vars_sf["WS10M"]
+ws = dplyr::rename(ws, ws = WS10M)
+ws = rasterize(ws, raster_template, res=30)
+prec = climate_vars_sf["PRECTOTCORR"]
+prec = dplyr::rename(prec, prec = PRECTOTCORR)
+prec = rasterize(prec, raster_template, res=30)
+stack = stack(temp, rh, ws, prec)
+hist(temp$temp, maxpixels=22000000)
+fwiRasters = fwiRaster(stack)
+plot(fwiRasters)
+names(stack)
+
+library(stars)
+t = system.file(".Data/climate/temp.nc", package = "stars")
+temp = stars::read_ncdf(t)
+r = system.file("Data/climate/rh.nc", package = "stars")
+rh = stars::read_ncdf(r)
