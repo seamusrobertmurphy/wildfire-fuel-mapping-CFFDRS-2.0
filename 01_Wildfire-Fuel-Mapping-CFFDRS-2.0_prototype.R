@@ -20,53 +20,19 @@ library(xmlparsedata)
 library(rex)
 library(cyclocomp)
 library(lintr)
+library(RColorBrewer)
 conflict_prefer("mutate", "dplyr")
-# RUN STATIC LINTING OF SUBSEQUENT SCRIPT SYNTAX
+
+# Run static linting of following script file
 lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
 
-## IMPORT AOI FILES
+## Import AOI files
 aoi = sf::read_sf("./Data/hydrology/watersheds/watershed_okanagan.shp")
 aoi = dplyr::rename(aoi, Okanagan_Watershed = WTRSHDGRPC)
 aoi = aoi[1, "Okanagan_Watershed"]
 base::plot(aoi)
 
-# BC by Fire Districts
-#aoi_bc_fire_centres = sf::read_sf("./Data/fire-centres/fire-centres-bc/DRPMFFRCNT_polygon.shp")
-#aoi_bc_fire_centres = dplyr::rename(aoi_bc_fire_centres, BC_FIRE_CENTRES = MFFRCNTRNM)
-#aoi_bc_fire_centres = aoi_bc_fire_centres["BC_FIRE_CENTRES"]
-#base::plot(aoi_bc_fire_centres)
-
-# Kamloops Fire Centre District
-#aoi = sf::read_sf("./Data/fire-centres/fire-centres-kamloops/DRPMFFRCNT_polygon.shp")
-#aoi = dplyr::rename(aoi, Kamloops_Fire_Centre = MFFRCNTRNM)
-#aoi = aoi[1, "Kamloops_Fire_Centre"]
-#base::plot(aoi)
-
-#watersheds = sf::read_sf("./Data/hydrology/watersheds/watersheds_bc/watersheds_bc.shp")
-#watersheds_kamloopsFC = sf::st_intersection(sf::st_make_valid(watersheds), aoi)
-#plot(st_geometry(watersheds_kamloopsFC))
-#plot(st_geometry(watersheds))
-
-## IMPORT MFLNRO DISTURBANCE DATASETS
-cutblocks = sf::read_sf("./Data/cutblocks/cutblocks_kamloops_fire_centre/CNS_CUT_BL_polygon.shp")
-cutblocks_kamloopsFC = sf::st_intersection(sf::st_make_valid(cutblocks), aoi)
-cutblocks_kamloopsFC = cutblocks_kamloopsFC %>% 
-  dplyr::select[c("CUTBLOCKID", "HARVESTYR", "AREAHA", "DSTRBEDDT")] 
-
-
-burns_BC = sf::read_sf("./Data/burns/burns-historical/H_FIRE_PLY_polygon.shp")
-burns_kamloopsFC = sf::st_intersection(sf::st_make_valid(burns_BC), aoi)
-burns_kamloopsFC = burns_kamloopsFC %>% 
-  dplyr::select[c("", "", "")]
-
-
-mpb = sf::read_sf("./Data/pests/beetle-mpb/FADM_MPBSA_polygon.shp")
-mpb_kamloopsFC = sf::st_intersection(sf::st_make_valid(mpb), aoi)
-mpb_kamloopsFC = mpb_kamloopsFC %>% 
-  dplyr::select[c("", "", "")]
-
-## FUEL TYPING ALGORITHM (Perrakis et al 2015)
 # Import VRI current and historical datasets
 vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
 vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE")]
@@ -102,9 +68,20 @@ summary.factor(vri_ok_2020$N_LOG_DIST)
 
 
 
-
+## Generate Panel 1 indicator: Fuel Type using MFLNRO algo (Perrakis et al 2015)
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_N = case_when(
-  BCLCS_LV_1 == "N" | 
+  BCLCS_LV_1 == "N" & HRVSTDT<=19950101 & (BEC_ZONE=="CMA" | BEC_ZONE=="IMA") | 
+    BCLCS_LV_1 == "N" & is.na(HRVSTDT) & (BEC_ZONE=="CMA" | BEC_ZONE=="IMA") | 
+    BCLCS_LV_1 == "N" & is.na(HRVSTDT) & (BCLCS_LV_2=="L" | is.na(BCLCS_LV_2)) & BCLCS_LV_3=="A" |
+    BCLCS_LV_1 == "N" & is.na(HRVSTDT) & (BCLCS_LV_2=="L" | is.na(BCLCS_LV_2)) & is.na(SPEC_CD_1) |
+    BCLCS_LV_1 == "N" & is.na(HRVSTDT) & BCLCS_LV_2!="L" & BCLCS_LV_2!="W" & !is.na(BCLCS_LV_2) |
+    BCLCS_LV_2=="W" |
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & (NP_CODE=="35" | NP_CODE=="42") |
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & is.na(NP_CODE) & (BEC_ZONE=="CMA" & BEC_ZONE=="IMA") | 
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD=="F" & NP_CODE!="11" & NP_CODE!="12" & NP_CODE!="13" & NP_CODE!="60" & NP_CODE!="62" & NP_CODE!="63" |
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & (INV_STD_CD=="V" | INV_STD_CD=="I") & (LAND_CD_1=="LA" | LAND_CD_1=="RE" | LAND_CD_1=="RI" | LAND_CD_1=="OC") |
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & (INV_STD_CD=="V" | INV_STD_CD=="I") & (LAND_CD_1=="SL" | LAND_CD_1=="ST" | LAND_CD_1=="HE" | LAND_CD_1=="HF" | is.na(LAND_CD_1)) & (BEC_ZONE=="CMA" | BEC_ZONE=="IMA") |
+    is.na(HRVSTDT) & is.na(SPEC_CD_1) & (INV_STD_CD=="V" | INV_STD_CD=="I") & (LAND_CD_1=="SI" | LAND_CD_1=="GL" | LAND_CD_1=="PN" | LAND_CD_1=="RO" | LAND_CD_1=="BR" | LAND_CD_1=="TA" | LAND_CD_1=="BI" | LAND_CD_1=="MZ" | LAND_CD_1=="LB" | LAND_CD_1=="EL" | LAND_CD_1=="GL" | LAND_CD_1=="RS" | LAND_CD_1=="ES" | LAND_CD_1=="LS" | LAND_CD_1=="RM" | LAND_CD_1=="BE" | LAND_CD_1=="BU" | LAND_CD_1=="RZ" | LAND_CD_1=="MU" | LAND_CD_1=="CU" | LAND_CD_1=="MN" | LAND_CD_1=="GP" | LAND_CD_1=="TZ" | LAND_CD_1=="RN" | LAND_CD_1=="MI" | LAND_CD_1=="OT" | LAND_CD_1=="LA" | LAND_CD_1=="RE" | LAND_CD_1=="RI") |
     BCLCS_LV_1 == "U" ~ "1" ) 
   )
 
@@ -1294,7 +1271,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_SZONE=="xk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_SZONE=="xk" |
     
-    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="dc" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="dc" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="dcp" |
@@ -1314,7 +1290,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="xh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="xk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_SZONE=="xk" |
-    
     
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=12 & CR_CLOSURE>=55 & BEC_ZONE=="PP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & PROJ_HT_1>=12 & CR_CLOSURE>=55 & BEC_ZONE=="PP" |
@@ -1954,7 +1929,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M1M2 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SX" & BEC_ZONE=="SWB" & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SX" & BEC_ZONE=="SWB" & BCLCS_LV_5=="SP" |
     
-    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE!="BWBS" & BEC_ZONE!="SWB" & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE!="BWBS" & BEC_ZONE!="SWB" & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE!="BWBS" & BEC_ZONE!="SWB" & BCLCS_LV_5=="SP" |
@@ -1969,36 +1943,43 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M1M2 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="S" & BEC_ZONE=="BWBS" & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="S" & BEC_ZONE=="BWBS" & BCLCS_LV_5=="SP" |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="DE" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="OP" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="DE" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="OP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="SP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="S" & BEC_ZONE=="SWB" & BCLCS_LV_5=="SP" |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="SB" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="SB" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SB" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="SW" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="SW" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SW" |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="SE" & BCLCS_LV_5=="DE" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="SE" & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SE" & BCLCS_LV_5=="DE" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="SE" & BCLCS_LV_5=="OP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="SE" & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SE" & BCLCS_LV_5=="OP" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & SPEC_CD_1=="SE" & BCLCS_LV_5=="SP" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140101 & SPEC_CD_1=="SE" & BCLCS_LV_5=="SP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & SPEC_CD_1=="SE" & BCLCS_LV_5=="SP" |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BCLCS_LV_5=="DE" |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BCLCS_LV_5=="DE" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & HRVSTDT<20140101 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BCLCS_LV_5=="DE" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BCLCS_LV_5=="DE" |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & HRVSTDT<20140101 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PJ") |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & is.na(HRVSTDT) & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PJ") |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & HRVSTDT<20140101 & (SPEC_CD_1=="S" | SPEC_CD_1=="SE" | SPEC_CD_1=="SW" | SPEC_CD_1=="SX") |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=65 & SPEC_PCT_1<=80 & is.na(HRVSTDT) & (SPEC_CD_1=="S" | SPEC_CD_1=="SE" | SPEC_CD_1=="SW" | SPEC_CD_1=="SX") |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1!="S" & SPEC_PCT_1<40 & HRVSTDT<20140000 |
+    
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1<65 & HRVSTDT<20140101 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI" | SPEC_CD_1=="B" | SPEC_CD_1=="BA" | SPEC_CD_1=="BL" | SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY" | SPEC_CD_1=="S" | SPEC_CD_1=="SE" | SPEC_CD_1=="SW" | SPEC_CD_1=="SX" | SPEC_CD_1=="H") |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1<65 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI" | SPEC_CD_1=="B" | SPEC_CD_1=="BA" | SPEC_CD_1=="BL" | SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY" | SPEC_CD_1=="S" | SPEC_CD_1=="SE" | SPEC_CD_1=="SW" | SPEC_CD_1=="SX" | SPEC_CD_1=="H") |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1!="S" & SPEC_PCT_1<40 & HRVSTDT<20140101 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1!="S" & SPEC_PCT_1<40 & is.na(HRVSTDT) |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="S" & SPEC_PCT_1<40 & HRVSTDT<20140000 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="S" & SPEC_PCT_1<40 & HRVSTDT<20140101 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="S" & SPEC_PCT_1<40 & is.na(HRVSTDT) |
     
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SB" & SPEC_PCT_1<40 & HRVSTDT<20140000 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SB" & SPEC_PCT_1<40 & HRVSTDT<20140101 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SB" & SPEC_PCT_1<40 & is.na(HRVSTDT) |
-    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SW" & SPEC_PCT_1<40 & HRVSTDT<20140000 |
+    BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SW" & SPEC_PCT_1<40 & HRVSTDT<20140101 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SW" & SPEC_PCT_1<40 & is.na(HRVSTDT) |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SX" & SPEC_PCT_1<40 & HRVSTDT<20140000 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SX" & SPEC_PCT_1<40 & is.na(HRVSTDT) |
@@ -2338,6 +2319,8 @@ vri_ok_2020 = vri_ok_2020 %>%
     fuel_O1=="1" ~ "O1a/b" )
     )
 
+vri_ok_2020$fueltype[is.na(vri_ok_2020$fueltype)] = "N"
+summary.factor(vri_ok_2020$fueltype)
 
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(fire_centre = case_when(
@@ -2349,55 +2332,30 @@ vri_ok_2020 = vri_ok_2020 %>%
     Okanagan_Watershed!="NA" ~ "Okanagan" ) 
     )
 
-summary.factor(vri_ok_2020$BEC_SZONE)
-
-
 vri_ok_2020 = vri_ok_2020 %>% 
-  dplyr::select(-c(1:24))
+  dplyr::mutate(week_ending = case_when(
+    Okanagan_Watershed!="NA" ~ "20210103" ) 
+  )
 
+vri_ok_2020$week_ending = as.Date(
+  vri_ok_2020$week_ending, format = "%Y/%m/%d")
+class(vri_ok_2020$week_ending)
+#saveRDS(vri_ok_2020, "wildfire_cabin_df_v1")
+map_interactive = wildfire_cabin_df_v1 %>% 
+  st_transform(crs = "+init=epsg:4326") %>% 
+  leaflet() %>%
+  addProviderTiles(provider = "CartoDB.Positron") %>%
+  addPolygons(label = labels,
+              stroke = FALSE,
+              smoothFactor = 0.5,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~ pal(fueltype),
+              )
 
-#glimpse(vri_ok_2020)
-  
-#years_since_harvest |
-#   vri_2020_2019_2018_2017
-  
-
-
-
-
-
-
-# Fire Weather Maps
-climate_vars = read.csv("./Data/climate/power_nasa_kelowna.csv")
+## Generate Panel 2 indicator: Wildfire Weather Index Layer (CFFDRS 2022)
+climate_vars = vroom("./Data/climate/power_nasa_kelowna.csv")
 climate_vars_sf = st_as_sf(climate_vars, coords = c("LAT", "LON"))
 raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=20, crs = "EPSG:3005")
 
-temp = climate_vars_sf["T2M"]
-temp = dplyr::rename(temp, temp = T2M)
-temp = rasterize(temp, raster_template, res=20)
-
-rh = climate_vars_sf["RH2M"]
-rh = dplyr::rename(rh, rh = RH2M)
-rh = rasterize(rh, raster_template, res=20)
-
-ws = climate_vars_sf["WS10M"]
-ws = dplyr::rename(ws, ws = WS10M)
-ws = rasterize(ws, raster_template, res=20)
-
-prec = climate_vars_sf["PRECTOTCORR"]
-prec = dplyr::rename(prec, prec = PRECTOTCORR)
-prec = rasterize(prec, raster_template, res=20)
-
-stack = stack(temp, rh, ws, prec)
-names(stack)
-fwiRasters = fwiRaster(stack)
-plot(fwiRasters)
-
-bc <- bc_bound()
-region = regional_districts()
-kelowna <- region[region$ADMIN_AREA_NAME == "Regional District of Central Okanagan", ]
-kelowna = vect(kelowna$geometry)
-kelowna = rast(kelowna)
-plot(st_geometry(bc))
-plot(st_geometry(kelowna), col = "lightseagreen", add = TRUE)
 
