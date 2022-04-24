@@ -1,66 +1,32 @@
 
-# Pipeline for next-gen CFFDRS using cffdrs package
-
-library(conflicted)
-library(readr)
-library(tibble)
-library(sf)
-library(dplyr)
-library(caret)
-library(raster)
-library(terra)
-library(rgdal)
-library(cffdrs)
-library(bcmaps)
-library(htmlwidgets)
-library(leaflet)
-library(tidyverse)
-library(vroom)
-library(xmlparsedata)
-library(rex)
-library(cyclocomp)
-library(lintr)
-library(RColorBrewer)
-conflict_prefer("mutate", "dplyr")
-
-library(devtools)
-library(lidR)
+# Pipeline for the Cabin Wildfire Fuel Type and Readiness Data PLatform
+# package lunchbox 
 library(mapview)
+library(ggplot2)
+library(htmltools)
+library(leaflet)
+library(dplyr)
+library(naniar)
+library(feedr)
+library(sf)
+library(curl)
+library(purrr)
+conflict_prefer("mutate", "dplyr")
 library(rgl)
-library(pandocfilters)
-library(rmarkdown)
-library(formatR)
-library(gitignore)
-library(tinytex)
-library(knitr)
 library(raster)
-library(webdriver)
-library(webshot)
-library(webshot2)
 library(RColorBrewer)
-library(conflicted)
 library(readr)
 library(tibble)
-library(grid)
-library(sf)
-library(dplyr)
-library(raster)
 library(terra)
 library(rgdal)
-library(utils)
+library(rgeos)
 library(cffdrs)
-library(ncdf4)
-library(elevatr)
-library(ggplot2)
-library(ggmap)
-library(latticeExtra)
-library(rasterVis)
-library(curl)
-library(tmap)
-library(tmaptools)
+library(weathercan)
+library(lutz)
+library(httr)
 
-# Run static linting of following script file
-lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
+# Running static lint only of following script file
+# lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
 
 ## Import AOI files
@@ -70,9 +36,10 @@ aoi = aoi[1, "Okanagan_Watershed"]
 base::plot(aoi)
 
 # Import VRI current and historical datasets
-vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
-vri_ok_2020 = vri_ok_2020[c("BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE")]
+vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/vri-ok-2020-wide/VEG_R1_PLY_polygon_wide.shp")
+vri_ok_2020 = vri_ok_2020[c("FEATURE_ID", "BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE", "COMPARTMNT")]
 vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
+plot(st_geometry(vri_ok_2020))
 glimpse(vri_ok_2020)
 
 vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
@@ -2370,78 +2337,311 @@ vri_ok_2020 = vri_ok_2020 %>%
 
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(week_ending = case_when(
-    Okanagan_Watershed!="NA" ~ "20210103" ) 
+    Okanagan_Watershed!="NA" ~ "20210731" ) 
   )
 
 vri_ok_2020$week_ending = as.Date(
   vri_ok_2020$week_ending, format = "%Y/%m/%d")
 class(vri_ok_2020$week_ending)
-#saveRDS(vri_ok_2020, "wildfire_cabin_df_v1")
-#pal = colorBin(palette="OrRd", 9, domain = wildfire_cabin_df_v1$fueltype)
 
-map_interactive = wildfire_cabin_df_v1 %>% 
-  st_transform(crs = "+init=epsg:4326") %>% 
-  leaflet() %>%
-  addProviderTiles(provider = "CartoDB.Positron") %>%
-  addPolygons(label = labels,
-              stroke = FALSE,
-              smoothFactor = 0.5,
-              opacity = 1,
-              fillOpacity = 0.7,
-              fillColor = ~ pal(fueltype),
-              highlightOptions = highlightOptions(weight = 5,
-                                                  fillOpacity = 1,
-                                                  color = "black",
-                                                  opacity = 1,
-                                                  bringToFront = TRUE))
+watershed_subDrainages = sf::read_sf("./Data/hydrology/watersheds/watershed_bc_drainages/EABC_EC_DR_polygon.shp")
+watershed_hydrometrics = sf::read_sf("./Data/hydrology/watersheds/watershed_bc_drainages/HYD_WB_PLY_polygon.shp")
+watershed_subDrainages = sf::st_intersection(sf::st_make_valid(watershed_subDrainages), aoi) 
+watershed_hydrometrics = sf::st_intersection(sf::st_make_valid(watershed_hydrometrics), aoi) 
+watershed_subDrainages = watershed_subDrainages["EDU"] 
+watershed_hydrometrics = watershed_hydrometrics["SRCNM"] 
+vri_ok_2020_waterSub = st_join(vri_ok_2020, watershed_subDrainages, largest = TRUE)
+vri_ok_2020_waterSub_hydrometric = st_join(vri_ok_2020_waterSub, watershed_hydrometrics, largest = TRUE)
+
+cutblocks = sf::read_sf("./Data/cutblocks/cutblocks_kamloops_fire_centre/CNS_CUT_BL_polygon.shp")
+cutblocks_kamloopsFC = sf::st_intersection(sf::st_make_valid(cutblocks), aoi)
+cutblocks_kamloopsFC = cutblocks_kamloopsFC[c("CUTBLOCKID", "HARVESTYR", "AREAHA", "DSTRBEDDT")] 
+vri_ok_2020_waterSub_hydrometric_cutblocks = st_join(
+  vri_ok_2020_waterSub_hydrometric, cutblocks_kamloopsFC, largest = TRUE)
+
+burns_BC = sf::read_sf("./Data/burns/burns-historical/H_FIRE_PLY_polygon.shp")
+burns_kamloopsFC = sf::st_intersection(sf::st_make_valid(burns_BC), aoi)
+burns_kamloopsFC = burns_kamloopsFC[c("FIRE_YEAR", "FIRE_DATE", "FIRELABEL")]
+vri_ok_2020_waterSub_hydrometric_cutblocks_burns = st_join(
+  vri_ok_2020_waterSub_hydrometric_cutblocks, burns_kamloopsFC, largest = TRUE)
+
+mpb = sf::read_sf("./Data/pests/beetle-mpb/FADM_MPBSA_polygon.shp")
+mpb_kamloopsFC = sf::st_intersection(sf::st_make_valid(mpb), aoi)
+mpb_kamloopsFC = mpb_kamloopsFC[c("FFCTVDT", "LGSLTNFLNM", "FTRCD")]
+vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb = st_join(
+  vri_ok_2020_waterSub_hydrometric_cutblocks_burns, mpb_kamloopsFC, largest = TRUE)
+
+
+vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb = 
+  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb %>% 
+  dplyr::mutate(date = case_when(
+    Okanagan_Watershed!="NA" ~ "20210731" ) 
+  )
+
+vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date <- as.Date(as.character(
+  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date), format = "%Y%m%d")
+class(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date)
+vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date
+
+# alternative join functions:
+#vri_ok_2020_waterSub_mean = st_join(vri_ok_2020, watershed_subDrainages, left=TRUE) %>% 
+ # group_by(vri_ok_2020$FEATURE_ID) %>% summarise(mean(watershed_subDrainages$EDU))
+#vri_ok_2020_waterSub_mean_overlap = st_join(vri_ok_2020, watershed_subDrainages, join=st_overlaps, left=TRUE) %>% 
+ # group_by(vri_ok_2020$FEATURE_ID) %>% summarise(mean(watershed_subDrainages$EDU))
+#plot(st_geometry(vri_ok_2020_waterSub), border = 'black', col = vri_ok_2020_waterSub$col)
+#plot(st_geometry(vri_ok_2020_waterSub_mean), border = 'black', col = vri_ok_2020_waterSub_mean$col)
+
 
 ## Generate Panel 2 indicator: Wildfire Weather Index Layer (CFFDRS 2022)
-climate_vars = read.csv("./Data/climate/nasa_okanagan_202105-202108.csv")
-climate_vars_sf = st_as_sf(climate_vars, coords = c("LON", "LAT")) #climate_vars_sf_centroid_wgs84 = st_transform(climate_vars_sf_centroid, "EPSG:4326")
-climate_vars_sf = st_set_crs(climate_vars_sf, "EPSG:4326") # set CRS
-climate_vars_projected = st_transform(climate_vars_sf, "EPSG:3005")
-raster_template = rast(ext(climate_vars_projected), res=100 , crs = st_crs(climate_vars_projected)$wkt)  #raster_template = raster(xmn=49.25, xmx=51.25, ymn=-122.25, ymx=-116.25, res=30, crs = 4326)
+radius10km_search = stations_search(coords = c(49.5, -119.5), dist = 10, interval = "day")
+radius100km_search = stations_search(coords = c(49.5, -119.5), dist = 100, interval = "day")
+radius100km_search$station_id
 
-temp = climate_vars_projected["T2M"]
-temp = dplyr::rename(temp, temp = T2M)
-temp_rast = terra::rasterize(vect(temp), raster_template, field = "temp", fun=mean)
-temp = raster::raster(temp_rast)
-raster::writeRaster(temp, filename = "./Data/climate/temp.tif", overwrite=T)
-temp = raster::raster("./Data/climate/temp.tif")
+ok_stationsx18 = weather_dl(station_ids = c(1052, 1054, 1026, 1053, 50269, 982, 1063, 979, 1062, 1025, 1061, 1036, 1033, 991, 1018, 983, 26994, 1077), start="2021-07-30", end="2021-07-31", interval="day")
+ok_stationsx2Radius100km = weather_dl(station_ids = c(50269, 979, 1063, 1082, 26993,   984,  1078,  1034,  1047,  1046,  1049,  1035,  1038,  1039,  6836,
+                                                      1037,   981,  1012,  1072,  1073, 26932, 1005,  1050,  1011,  1010,  1017,  1007,   996,   990,  1009,
+                                                      1006,  1008, 26991,  1004,  1003,  1031,  1023, 46027,  1024, 1000,   995,  1002,   977,   999,  1079,
+                                                      1080,  1093, 51117, 10976, 48369,  1001, 30954,  1058,  1041,  1043,  1040,  1042, 1044,  1048,  1081,
+                                                      1083,   986,  1094,  1092,  1074,   987,  1076,   978,  1075,  1032, 27122,  1089,  1057,  1045,  1051, 
+                                                      1055,  1056, 52958,  6834,  1088,  1059,  1091,  6835,  1060,  1027,  1086,  1071,  1090,  1065,  1068, 
+                                                      46987,  6837,  1064, 980,  1066,   992,  1067,   988,   994, 50579, 26996,  1297,  1084,  1087,  1085, 
+                                                      1069, 993), start="2021-07-31", end="2021-07-31")
 
-head(temp)
-head(temp_rast)
-head(climate_vars_sf)
-head(climate_vars_projected)
+ok_stationx9 = weather_dl(station_ids = c(50269, 979, 51117, 48369, 1041, 52958,  6834, 1068, 46987), start="2021-07-31", end="2021-07-31", interval = "day")
+ok_stationx1 = weather_dl(station_ids = c(50269), start="2021-07-31", end="2021-07-31", interval = "day")
 
-plot(temp)
+filter(ok_stationx1, date ==  "2021-07-31")
+ok_stationx1 = dplyr::select(ok_stationx1, station_id, lat, lon, 
+  date,temp, precip_amt, rel_hum, wind_spd)
+ok_stationx9 = dplyr::select(ok_stationx9, station_id, lat, lon, 
+  date, temp, precip_amt, rel_hum, wind_spd)
+
+ok_stationx1_sf = st_as_sf(ok_stationx1, coords = c("lon", "lat"), crs = "+proj=longlat") %>%
+  st_transform(ok_stationx1_sf, crs=st_crs(aoi)) 
+  
+ok_stationx9_sf = st_as_sf(ok_stationx9, coords = c("lon", "lat"), crs = "+proj=longlat")
+ok_stationx9_sf = st_transform(ok_stationx9_sf, crs=st_crs(aoi))
+
+summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$EDU)
+summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$SRCNM)
+summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$COMPARTMNT)
+
+vri_2020_weather_interp_custom =  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb %>%
+  st_join(., ok_stationx9_sf) %>% group_by(SRCNM, COMPARTMNT) %>% summarize(
+    n_stations = length(unique(station_id)), temp = mean(temp, na.rm=T)) %>% ungroup()
+mapview(vri_2020_weather_interp_custom, zcol = "temp", legend = TRUE)
+
+vri_2020_weather_interp_auto = weathercan::weather_interp(
+  data = vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb, 
+  weather = ok_stationx1_sf, cols=c("temp", "precip_amt", "rel_hum", "wind_spd"), interval = "day", 
+  na_gap = 2)
+
+class(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date)
+class(ok_stationx1_sf$date)
+
+#ok_stationsx2Radius30km = weather_dl(station_ids = c(50269, 979), start="2021-07-31", end="2021-07-31")
+#ok_stationsx1Radius10km = weather_dl(station_ids = c(50269), start="2021-07-31", end="2021-07-31")
+#ok_stationsx2Radius30km_sampled = dplyr::select(ok_stationsx2Radius30km,
+ #                                               station_id, lat, lon, date, 
+  #                                              temp, precip_amt, 
+   #                                             rel_hum, wind_spd)
+#ok_stationsx1Radius10km_sampled = dplyr::select(ok_stationsx1Radius10km,
+ #                                               station_id, lat, lon, date, 
+  #                                              temp, precip_amt, 
+   #                                             rel_hum, wind_spd)
+
+vri_ok_2020_with_weather = weathercan::weather_interp(
+  data = vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb,
+  weather = ok_stationsx1Radius100km_sampled_20210731,
+  cols=c("temp", "precip_amt", "rel_hum", "wind_spd"), na_gap = 1)
+  
+
+summary(vri_ok_2020_with_weather)
+ggplot(data = vri_ok_2020_with_weather, aes(x = temp, fill = FEATURE_ID)) +
+                           theme_bw() +
+                           theme(legend.position = "none") +
+                           geom_histogram(binwidth = 1) +
+                           labs(x = "Temperature (C)", y = "Cutblock ID", fill = "AREAHA")
 
 
-raster_template = rast(ext(aoi_sf), resolution = 100, crs = st_crs(aoi_sf)$wkt) # template for rasterization
+vri_ok_2020_comp_temp_rh = vri_ok_2020_comp_temp %>%
+  st_join(vri_ok_2020_comp_temp, ok_stationsx1Radius100km_sampled_20210731) %>%
+  group_by(SRCNM) %>%
+  summarize(n_stations = length(unique(station_id)),
+            rel_hum = mean(rel_hum, na.rm = TRUE)) %>% ungroup()
+
+vri_ok_2020_comp_temp_rh_prec = vri_ok_2020_comp_temp_rh %>%
+  st_join(vri_ok_2020_comp_temp_rh, ok_stationsx1Radius100km_sampled_20210731) %>%
+  group_by(SRCNM) %>%
+  summarize(n_stations = length(unique(station_id)),
+            precip_amt = mean(precip_amt, na.rm = TRUE)) %>% ungroup()
+
+vri_ok_2020_comp_temp_rh_prec_ws = vri_ok_2020_comp_temp_rh_prec %>%
+  st_join(vri_ok_2020_comp_temp_rh_prec, ok_stationsx1Radius100km_sampled_20210731) %>%
+  group_by(SRCNM) %>%
+  summarize(n_stations = length(unique(station_id)),
+            wind_spd = mean(wind_spd, na.rm = TRUE)) %>% ungroup()
+
+mapview(vri_ok_2020_comp_temp_rh_prec_ws, zcol = "wind_spd", legend = TRUE)
+view(vri_ok_2020_comp_temp_rh_prec_ws)
+saveRDS(vri_ok_2020_comp_temp_rh_prec_ws, "wildfire_cabin_df_v1.RDS")
+
+## Generate Panel 3 Indicator: CFFDRS FBP maps
+
+
+# Generate interactive map and labelling functions
+labels = sprintf(
+  "<strong>%s</strong><br/>%g fuel type",
+  vri_ok_2020_comp_temp_rh_prec_ws$FEATURE_ID, vri_ok_2020_comp_temp_rh_prec_ws$fueltype) %>%
+  lapply(htmltools::HTML)
+
+
+#pal = colorBin(palette="OrRd", 9, domain = wildfire_cabin_df_v1$fueltype)
+
+#map_interactive = wildfire_cabin_df_v1 %>% 
+#  st_transform(crs = "+init=epsg:4326") %>% 
+#  leaflet() %>%
+#  addProviderTiles(provider = "CartoDB.Positron") %>%
+#  addPolygons(label = labels,
+#              stroke = FALSE,
+#              smoothFactor = 0.5,
+#              opacity = 1,
+#              fillOpacity = 0.7,
+#              fillColor = ~ pal(fueltype),
+#              highlightOptions = highlightOptions(weight = 5,
+#                                                  fillOpacity = 1,
+#                                                  color = "black",
+#                                                  opacity = 1,
+#                                                  bringToFront = TRUE))
+
+
+
+
+
+
+
+
+
+
+
+
+
+# nasapower pipeline
+library("nasapower")
+daily_single_ag <- get_power(
+  community = "ag",
+  lonlat = c(-122.25, 48.5, -116.25, 52.5),
+  pars = c("RH2M", "T2M", "PRECTOTCORR", "WS10M"),
+  dates = c("2021-07-31", "2021-07-31"),
+  temporal_api = "daily")
+
+climate_ok_20210731_sf = st_as_sf(daily_single_ag, coords = c("LON", "LAT"), crs = "+proj=longlat") # %>% st_transform(climate_ok_20210731_sf, crs=st_crs(aoi)) 
+st_crs(climate_ok_20210731_sf) # = crs/epsg:9122/wgs84 - st_transform(climate_ok_20210731_sf, crs = "+init=epsg:9122")
+climate_ok_20210731_sf <- st_transform(climate_ok_20210731_sf, "+proj=longlat +datum=WGS84")
+climate_ok_20210731_ext = ext(vect(climate_ok_20210731_sf))
+climate_ok_20210731_sp <- as(climate_ok_20210731_sf, Class = 'Spatial')
+raster_template <- rast()
+raster_template <- rast(nrows=150, ncols=50, nlyr=1, xmin=-122.25, xmax=-116.25, ymin=48.75, ymax=52.25)
+res(raster_template) = 100
+
+                        #, crs=st_crs(climate_ok_20210731_sf), res=100)
+
+raster_template = rast(vect(climate_ok_20210731_ext), resolution = 1000, crs = st_crs(climate_ok_20210731_sf)) # template for rasterization
 species_class_rast = terra::rasterize(vect(vri_species_aoi), raster_template, field = "species_class", touches = TRUE)
 species_class_raster = raster::raster(species_class_rast)
 writeRaster(species_class_raster, filename = "./Data/Raster_Covariates/UnMasked/species_class_raster.tif", overwrite=TRUE)
 species_class_raster = raster::raster("./Data/Raster_Covariates/UnMasked/species_class_raster.tif")
-plot(species_class_rast, main = "species_class_raster")
+
+climate_ok_20210731_raster <- rasterize(climate_ok_20210731_sp, r, 'name', fun=min)
+
+climate_ok_20210731_raster = rasterize(vect(climate_ok_20210731_sf))
+climate_ok_20210731_raster = stars::st_rasterize(climate_ok_20210731_sf)
+
+                                                 , template = st_as_stars(st_bbox(climate_ok_20210731_sf)), values = NA_real_)
+class(climate_ok_20210731_raster)
+x = st_rasterize(nc)
+raster_template = raster::raster(climate_ok_20210731_raster)
+
+#raster_template = rast(ext(climate_ok_20210731_sf), resolution = 100, crs = "+proj=longlat +datum=WGS84") # template for rasterization
+raster_template = raster::raster(raster_template)
+#st_transform(crs = "+init=epsg:4326") %>% 
 
 
-rh = climate_vars_sf["RH2M"]
+temp = climate_ok_20210731_sf["T2M"]
+temp = dplyr::rename(temp, temp = T2M)
+rh = climate_ok_20210731_sf["RH2M"]
 rh = dplyr::rename(rh, rh = RH2M)
-rh = rasterize(rh, raster_template, res=30)
-ws = climate_vars_sf["WS10M"]
+ws = climate_ok_20210731_sf["WS10M"]
 ws = dplyr::rename(ws, ws = WS10M)
-ws = rasterize(ws, raster_template, res=30)
-prec = climate_vars_sf["PRECTOTCORR"]
+prec = climate_ok_20210731_sf["PRECTOTCORR"]
 prec = dplyr::rename(prec, prec = PRECTOTCORR)
-prec = rasterize(prec, raster_template, res=30)
-stack = stack(temp, rh, ws, prec)
-hist(temp$temp, maxpixels=22000000)
-fwiRasters = fwiRaster(stack)
-plot(fwiRasters)
-names(stack)
 
-library(stars)
-t = system.file(".Data/climate/temp.nc", package = "stars")
-temp = stars::read_ncdf(t)
-r = system.file("Data/climate/rh.nc", package = "stars")
-rh = stars::read_ncdf(r)
+
+temp_cast = st_cast(st_cast(temp, 'MULTIPOINT'), 'POINT')
+temp_raster = rasterize(as(temp_cast, 'Spatial'), raster_template, field='temp')
+rh_cast = st_cast(st_cast(rh, 'MULTIPOINT'), 'POINT')
+rh_raster = rasterize(as(rh_cast, 'Spatial'), raster_template, field='rh')
+ws_cast = st_cast(st_cast(ws, 'MULTIPOINT'), 'POINT')
+ws_raster = rasterize(as(ws_cast, 'Spatial'), raster_template, field='ws')
+prec_cast = st_cast(st_cast(prec, 'MULTIPOINT'), 'POINT')
+prec_raster = rasterize(as(prec_cast, 'Spatial'), raster_template, field='prec')
+
+library(cffdrs)
+raster::writeRaster(temp_raster, filename = "./Data/climate/temp_raster.tif", overwrite=TRUE)
+raster::writeRaster(rh_raster, filename = "./Data/climate/rh_raster.tif", overwrite=TRUE)
+raster::writeRaster(ws_raster, filename = "./Data/climate/ws_raster.tif", overwrite=TRUE)
+raster::writeRaster(prec_raster, filename = "./Data/climate/prec_raster.tif", overwrite=TRUE)
+temp = raster::raster("./Data/climate/temp_raster.tif")
+rh = raster::raster("./Data/climate/rh_raster.tif")
+ws = raster::raster("./Data/climate/ws_raster.tif")
+prec = raster::raster("./Data/climate/prec_raster.tif")
+names(temp) = 'temp'
+names(rh) = 'rh'
+names(ws) = 'ws'
+names(prec) = 'prec'
+
+stack = stack(temp, rh, ws, prec)
+fwiRasters = fwiRaster(stack, out='all')
+cffdrs::fwiRaster(stack, out = "all")
+graphics.off()
+plot(fwiRasters)
+
+
+
+
+
+day01src <- system.file("extdata","test_rast_day01.tif",package="cffdrs")
+day01 <- stack(day01src)
+day01 <- crop(day01,c(250,255,47,51))
+names(day01)<-c("temp","rh","ws","prec")
+
+
+
+
+
+
+
+
+
+# weatherCan piping (library=weathercan)
+bc <- bc_bound()
+bcmap_crs = crs(bc)
+rd <- regional_districts()
+summary.factor(rd$ADMIN_AREA_NAME)
+ok_similK = rd[rd$ADMIN_AREA_NAME=="Regional District of Okanagan-Similkameen", ]
+ok_central = rd[rd$ADMIN_AREA_NAME=="Regional District of Central Okanagan", ]
+ok_north = rd[rd$ADMIN_AREA_NAME=="Regional District of North Okanagan", ]
+kamloops_FC = 
+  plot(st_geometry(bc))
+plot(st_geometry(ok_similK), col = "lightseagreen", add = TRUE)
+plot(st_geometry(ok_north), col = "blue", add = TRUE)
+plot(st_geometry(ok_central), col = "green", add = TRUE)
+
+kamloopsFC = sf::read_sf("./Data/fire-centres/fire-centres-kamloops/DRPMFFRCNT_polygon.shp")
+kamloopsFC = dplyr::rename(kamloopsFC, Kamloops_Fire_Centre = MFFRCNTRNM)
+kamloopsFC = kamloopsFC[1, "Kamloops_Fire_Centre"]
+plot(kamloopsFC, col="lightseagreen", add=TRUE)
+plot(aoi, col="blue", add=T)
+
+stations_dl() #update stations function
+stations_meta() # check last update
