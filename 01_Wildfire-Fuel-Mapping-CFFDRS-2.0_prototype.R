@@ -2499,7 +2499,8 @@ fwi_DC_sf = sf::st_as_sf(fwi_DC_stars,
 fwi_DC_sf = rename(fwi_DC_sf, DC = var1.pred) 
 
 
-master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T)
+# master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
+# need to back-edit these with future coding to replace with current master file 
 master_sf_interp = st_join(master_sf_interp, fwi_ISI_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fwi_BUI_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fwi_FWI_sf, largest=T)
@@ -2622,10 +2623,48 @@ fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred)
 master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fbp_RAZ_sf, largest=T)
 
-  
-master_sf_interp = master_sf_interp %>% dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+library(dplyr)
+summary.factor(master_sf_interp$Okanagan_Watershed)
+
+master_sf_interp = master_sf_interp %>% 
+  dplyr::mutate(week_ending = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+
+master_sf_interp = master_sf_interp %>% 
+  dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+
+master_sf_interp$week_ending <- as.Date(
+  as.character(master_sf_interp$week_ending), format = "%Y%m%d")
+
+master_sf_interp$date <- as.Date(
+  as.character(master_sf_interp$date), format = "%Y%m%d")
+
 master_sf_interp$date <- as.Date(as.character(master_sf_interp$date), format = "%Y%m%d")
+master_sf_interp$week_ending
 master_sf_interp$date
 
 saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
 master_sf_interp = readRDS("./app/master_sf_interp.RDS")
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
