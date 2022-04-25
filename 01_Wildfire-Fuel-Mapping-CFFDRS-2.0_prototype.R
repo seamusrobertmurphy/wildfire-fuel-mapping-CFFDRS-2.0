@@ -10,6 +10,7 @@ library(rgdal)
 library(cffdrs)
 library(nasapower)
 library(stars)
+library(rgeos)
 # Run static lint intermittently in local script environment
 # lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
@@ -2358,11 +2359,7 @@ mpb_kamloopsFC = mpb_kamloopsFC[c("FFCTVDT", "LGSLTNFLNM", "FTRCD")]
 master_sf = st_join(vri_ok_2020_waterSub_hydrometric_cutblocks_burns, 
                     mpb_kamloopsFC, largest = TRUE)
 
-master_sf = master_sf %>% dplyr::mutate(date = case_when(
-    Okanagan_Watershed!="NA" ~ "20210731" ))
 
-master_sf$date <- as.Date(as.character(master_sf$date), 
-    format = "%Y%m%d")
 
 # Begin Fire Weather Mapping: nasapower API piped directly without need for key
 climate_vars_daily = get_power(community = "ag",
@@ -2401,8 +2398,8 @@ fwi_DC = fwi_out3["DC"]
 library(gstat)
 bbox = st_bbox(aoi)
 grd_template <- expand.grid(
-  X = seq(from = bbox["xmin"], to = bbox["xmax"], by = 100),
-  Y = seq(from = bbox["ymin"], to = bbox["ymax"], by = 100)
+  X = seq(from = bbox["xmin"], to = bbox["xmax"], by = 250),
+  Y = seq(from = bbox["ymin"], to = bbox["ymax"], by = 250)
   )
 
 grd_crs = crs(fwi_ISI)
@@ -2501,13 +2498,13 @@ fwi_DC_sf = sf::st_as_sf(fwi_DC_stars,
   st_transform(fwi_DC_sf, crs=st_crs(aoi)) 
 fwi_DC_sf = rename(fwi_DC_sf, DC = var1.pred) 
 
-master_sf_interp = st_join(master_sf, fwi_ISI_sf, largest=T)
-master_sf_interp = st_join(master_sf, fwi_BUI_sf, largest=T)
-master_sf_interp = st_join(master_sf, fwi_FWI_sf, largest=T)
-master_sf_interp = st_join(master_sf, fwi_FFMC_sf, largest=T)
-master_sf_interp = st_join(master_sf, fwi_DMC_sf, largest=T)
-master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T)
 
+master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fwi_ISI_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fwi_BUI_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fwi_FWI_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fwi_FFMC_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fwi_DMC_sf, largest=T)
 
 
 # Fire Behaviour Prediction Mapping
@@ -2524,9 +2521,7 @@ master_sf = st_join(master_sf, ELV, largest=T)
 master_sf = st_join(master_sf, GS, largest=T)
 master_sf = st_join(master_sf, Aspect, largest=T)
 
-
 fbp_input = as.data.frame(
-  master_sf[c("FEATURE_ID", "fueltype", "FFMC", "BUI", "WS", "DJ", "WS", "ELV", "GS", "Aspect")]) 
 fbp_input = rename(fbp_input, id = FEATURE_ID) 
 fbp_input = fbp_input %>% 
   mutate(lat = unlist(map(fbp_input$geometry,1)),
@@ -2610,6 +2605,8 @@ fbp_ROS_idw <- gstat::gstat(
   set=list(idp=2.0)
 )
 
+summary.factor(master_sf_interp$fueltype)
+
 fbp_ROS_interp <- interpolate(
   grd_template_raster, fbp_ROS_idw)
 fbp_ROS_stars = stars::st_as_stars(fbp_ROS_interp)
@@ -2619,75 +2616,16 @@ fbp_ROS_sf = sf::st_as_sf(fbp_ROS_stars,
 fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred) 
 
 
-master_sf_interp = st_join(master_sf, fbp_FD_sf, largest=T)
-master_sf_interp = st_join(master_sf, fbp_CFC_sf, largest=T)
+#master_sf_interp = st_join(master_sf, fbp_FD_sf, largest=T)
+#master_sf_interp = st_join(master_sf_interp, fbp_CFC_sf, largest=T)
+#master_sf_interp = st_join(master_sf_interp, fbp_ROS_sf, largest=T)
 master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
-master_sf_interp = st_join(master_sf, fbp_RAZ_sf, largest=T)
-master_sf_interp = st_join(master_sf, fbp_ROS_sf, largest=T)
+master_sf_interp = st_join(master_sf_interp, fbp_RAZ_sf, largest=T)
+
+  
+master_sf_interp = master_sf_interp %>% dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+master_sf_interp$date <- as.Date(as.character(master_sf_interp$date), format = "%Y%m%d")
+master_sf_interp$date
 
 saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
 master_sf_interp = readRDS("./app/master_sf_interp.RDS")
-
-
-#labelling rules for map functions
-labels = sprintf(
-  "<strong>%s</strong><br/>%g fuel class",
-  master_sf_interp$id, master_sf_interp$fueltype) %>%
-  leaflet() %>%
-  lapply(htmltools::HTML)
-
-)
-
-
-#setup map labelling rules
-labels = sprintf("<strong>%s</strong><br/>%s fuel class",
-  master_sf_interp$id, as.character(master_sf_interp$fueltype)) %>%
-  leaflet() %>%
-  lapply(htmltools::HTML)
-
-pal = colorBin(palette = "OrRd", 16, domain = master_sf_interp$fueltype)
-
-#setup map #?addProviderTiles
-
-map_interactive = master_sf_interp %>%
-  providers <- c("Stamen.TonerLite", "CartoDB.Positron", "Esri.WorldImagery", "NASAGIBS.ModisTerraTrueColorCR") %>%
-  map = leaflet() %>%
-  map_interactive = addProviderTiles(provider = "CartoDB.Positron") %>%
-  addPolygons(label = labels,
-              stroke = FALSE,
-              smoothFactor = 0.5,
-              opacity = 1,
-              fillOpacity = 0.7,
-              fillColor = ~ pal(fueltype),
-              highlightOptions = highlightOptions(
-                weight = 5,
-                fillOpacity = 1,
-                color = "black", 
-                opacity = 1, 
-                bringToFront = TRUE)) %>%
-  
-  addLegend("bottomright",
-            pal = pal,
-            values = ~ fueltype,
-            title = "Fuel Type",
-            opacity=0.7)
-
-  map_interactive = addProviderTiles(provider = "CartoDB.Positron") %>%
-  addPolygons(label = labels,
-              stroke = FALSE,
-              smoothFactor = 0.5,
-              opacity = 1,
-              fillOpacity = 0.7,
-              fillColor = ~ pal(fueltype),
-              highlightOptions = highlightOptions(
-                weight = 5,
-                fillOpacity = 1,
-                color = "black", 
-                opacity = 1, 
-                bringToFront = TRUE)) %>%
-  
-  addLegend("bottomright",
-            pal = pal,
-            values = ~ fueltype,
-            title = "Fuel Type",
-            opacity=0.7)
