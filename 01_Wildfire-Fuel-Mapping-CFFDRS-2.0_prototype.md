@@ -54,7 +54,6 @@ applying different mapping styles. Note that chunk outputs require
 substantial system memory and may cause crashes.
 
 ``` r
-register_google(key = 'AIzaSyDbjpyUjJp3VInMOqebU9yp2zff5hA-zBM')
 gmap1 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "satellite", source = "google", zoom = 9))
 gmap2 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "toner-lite", zoom = 9))
 gmap3 = ggmap(get_map(location = c(-119.7, 50.0), maptype = "toner-background", zoom = 9))
