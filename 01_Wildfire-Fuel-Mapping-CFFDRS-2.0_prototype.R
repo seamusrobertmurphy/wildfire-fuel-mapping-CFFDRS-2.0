@@ -1,31 +1,16 @@
 
-# Pipeline for the Cabin Wildfire Fuel Type and Readiness Data PLatform
-# package lunchbox 
-library(mapview)
-library(ggplot2)
-library(htmltools)
+#Action: Pipeline for the Cabin Wildfire Fuel Type and Readiness Data PLatform
 library(leaflet)
-library(dplyr)
-library(naniar)
-library(feedr)
+library(tidyverse)
 library(sf)
-library(curl)
-library(purrr)
-conflict_prefer("mutate", "dplyr")
-library(rgl)
 library(raster)
-library(RColorBrewer)
-library(readr)
 library(tibble)
 library(terra)
 library(rgdal)
-library(rgeos)
 library(cffdrs)
-library(weathercan)
-library(lutz)
-library(httr)
-
-# Running static lint only of following script file
+library(nasapower)
+library(stars)
+# Run static lint intermittently in local script environment
 # lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
 
@@ -2350,6 +2335,7 @@ watershed_subDrainages = sf::st_intersection(sf::st_make_valid(watershed_subDrai
 watershed_hydrometrics = sf::st_intersection(sf::st_make_valid(watershed_hydrometrics), aoi) 
 watershed_subDrainages = watershed_subDrainages["EDU"] 
 watershed_hydrometrics = watershed_hydrometrics["SRCNM"] 
+
 vri_ok_2020_waterSub = st_join(vri_ok_2020, watershed_subDrainages, largest = TRUE)
 vri_ok_2020_waterSub_hydrometric = st_join(vri_ok_2020_waterSub, watershed_hydrometrics, largest = TRUE)
 
@@ -2368,280 +2354,340 @@ vri_ok_2020_waterSub_hydrometric_cutblocks_burns = st_join(
 mpb = sf::read_sf("./Data/pests/beetle-mpb/FADM_MPBSA_polygon.shp")
 mpb_kamloopsFC = sf::st_intersection(sf::st_make_valid(mpb), aoi)
 mpb_kamloopsFC = mpb_kamloopsFC[c("FFCTVDT", "LGSLTNFLNM", "FTRCD")]
-vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb = st_join(
-  vri_ok_2020_waterSub_hydrometric_cutblocks_burns, mpb_kamloopsFC, largest = TRUE)
+
+master_sf = st_join(vri_ok_2020_waterSub_hydrometric_cutblocks_burns, 
+                    mpb_kamloopsFC, largest = TRUE)
+
+master_sf = master_sf %>% dplyr::mutate(date = case_when(
+    Okanagan_Watershed!="NA" ~ "20210731" ))
+
+master_sf$date <- as.Date(as.character(master_sf$date), 
+    format = "%Y%m%d")
+
+# Begin Fire Weather Mapping: nasapower API piped directly without need for key
+climate_vars_daily = get_power(community = "ag",
+                          lonlat = c(-122.25, 48.5, -116.25, 52.5),
+                          pars = c("RH2M", "T2M", "PRECTOTCORR", "WS10M"),
+                          dates = c("2021-07-31", "2021-07-31"),
+                          temporal_api = "daily") 
+
+climate_vars_daily = rename(climate_vars_daily, LONG = LON) 
+climate_vars_daily = rename(climate_vars_daily, LAT = LAT) 
+climate_vars_daily = rename(climate_vars_daily, YR = YEAR) 
+climate_vars_daily = rename(climate_vars_daily, MON = MM) 
+climate_vars_daily = rename(climate_vars_daily, DAY = DD) 
+climate_vars_daily = rename(climate_vars_daily, Dj = DOY) 
+climate_vars_daily = rename(climate_vars_daily, TEMP = T2M) 
+climate_vars_daily = rename(climate_vars_daily, RH = RH2M) 
+climate_vars_daily = rename(climate_vars_daily, WS = WS10M) 
+climate_vars_daily = rename(climate_vars_daily, PREC = PRECTOTCORR) 
+fwi_input = climate_vars_daily[c("LONG", "LAT", "YR", "MON", "DAY", "Dj", "TEMP", "RH", "WS", "PREC")] 
+
+fwi_out1<-fwi(fwi_input)
+fwi_out3<-fwi(fwi_input,init=fwi_out1,batch=FALSE)
+fwi_out3 = st_as_sf(fwi_out3, coords = c("LONG", "LAT"), crs = "+proj=longlat") %>%
+  st_transform(fwi_out3, crs=st_crs(master_sf)) 
+
+fwi_ISI = fwi_out3["ISI"]
+fwi_BUI = fwi_out3["BUI"]
+fwi_FWI = fwi_out3["FWI"]
+fwi_DSR = fwi_out3["DSR"]
+fwi_FFMC = fwi_out3["FFMC"]
+fwi_DMC = fwi_out3["DMC"]
+fwi_DC = fwi_out3["DC"]
 
 
-vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb = 
-  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb %>% 
-  dplyr::mutate(date = case_when(
-    Okanagan_Watershed!="NA" ~ "20210731" ) 
+# Interpolate FWI values
+library(gstat)
+bbox = st_bbox(aoi)
+grd_template <- expand.grid(
+  X = seq(from = bbox["xmin"], to = bbox["xmax"], by = 100),
+  Y = seq(from = bbox["ymin"], to = bbox["ymax"], by = 100)
   )
 
-vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date <- as.Date(as.character(
-  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date), format = "%Y%m%d")
-class(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date)
-vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date
+grd_crs = crs(fwi_ISI)
+crs_raster_format = grd_crs
+grd_template_raster <- grd_template %>% 
+  dplyr::mutate(Z = 0) %>% 
+  raster::rasterFromXYZ( 
+    crs = crs_raster_format)
 
-# alternative join functions:
-#vri_ok_2020_waterSub_mean = st_join(vri_ok_2020, watershed_subDrainages, left=TRUE) %>% 
- # group_by(vri_ok_2020$FEATURE_ID) %>% summarise(mean(watershed_subDrainages$EDU))
-#vri_ok_2020_waterSub_mean_overlap = st_join(vri_ok_2020, watershed_subDrainages, join=st_overlaps, left=TRUE) %>% 
- # group_by(vri_ok_2020$FEATURE_ID) %>% summarise(mean(watershed_subDrainages$EDU))
-#plot(st_geometry(vri_ok_2020_waterSub), border = 'black', col = vri_ok_2020_waterSub$col)
-#plot(st_geometry(vri_ok_2020_waterSub_mean), border = 'black', col = vri_ok_2020_waterSub_mean$col)
+fwi_ISI_idw <- gstat::gstat(
+  formula= ISI ~ 1, 
+  data = as(fwi_ISI, "Spatial"),
+  set=list(idp=2.0)
+  )
 
-
-## Generate Panel 2 indicator: Wildfire Weather Index Layer (CFFDRS 2022)
-radius10km_search = stations_search(coords = c(49.5, -119.5), dist = 10, interval = "day")
-radius100km_search = stations_search(coords = c(49.5, -119.5), dist = 100, interval = "day")
-radius100km_search$station_id
-
-ok_stationsx18 = weather_dl(station_ids = c(1052, 1054, 1026, 1053, 50269, 982, 1063, 979, 1062, 1025, 1061, 1036, 1033, 991, 1018, 983, 26994, 1077), start="2021-07-30", end="2021-07-31", interval="day")
-ok_stationsx2Radius100km = weather_dl(station_ids = c(50269, 979, 1063, 1082, 26993,   984,  1078,  1034,  1047,  1046,  1049,  1035,  1038,  1039,  6836,
-                                                      1037,   981,  1012,  1072,  1073, 26932, 1005,  1050,  1011,  1010,  1017,  1007,   996,   990,  1009,
-                                                      1006,  1008, 26991,  1004,  1003,  1031,  1023, 46027,  1024, 1000,   995,  1002,   977,   999,  1079,
-                                                      1080,  1093, 51117, 10976, 48369,  1001, 30954,  1058,  1041,  1043,  1040,  1042, 1044,  1048,  1081,
-                                                      1083,   986,  1094,  1092,  1074,   987,  1076,   978,  1075,  1032, 27122,  1089,  1057,  1045,  1051, 
-                                                      1055,  1056, 52958,  6834,  1088,  1059,  1091,  6835,  1060,  1027,  1086,  1071,  1090,  1065,  1068, 
-                                                      46987,  6837,  1064, 980,  1066,   992,  1067,   988,   994, 50579, 26996,  1297,  1084,  1087,  1085, 
-                                                      1069, 993), start="2021-07-31", end="2021-07-31")
-
-ok_stationx9 = weather_dl(station_ids = c(50269, 979, 51117, 48369, 1041, 52958,  6834, 1068, 46987), start="2021-07-31", end="2021-07-31", interval = "day")
-ok_stationx1 = weather_dl(station_ids = c(50269), start="2021-07-31", end="2021-07-31", interval = "day")
-
-filter(ok_stationx1, date ==  "2021-07-31")
-ok_stationx1 = dplyr::select(ok_stationx1, station_id, lat, lon, 
-  date,temp, precip_amt, rel_hum, wind_spd)
-ok_stationx9 = dplyr::select(ok_stationx9, station_id, lat, lon, 
-  date, temp, precip_amt, rel_hum, wind_spd)
-
-ok_stationx1_sf = st_as_sf(ok_stationx1, coords = c("lon", "lat"), crs = "+proj=longlat") %>%
-  st_transform(ok_stationx1_sf, crs=st_crs(aoi)) 
-  
-ok_stationx9_sf = st_as_sf(ok_stationx9, coords = c("lon", "lat"), crs = "+proj=longlat")
-ok_stationx9_sf = st_transform(ok_stationx9_sf, crs=st_crs(aoi))
-
-summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$EDU)
-summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$SRCNM)
-summary.factor(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$COMPARTMNT)
-
-vri_2020_weather_interp_custom =  vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb %>%
-  st_join(., ok_stationx9_sf) %>% group_by(SRCNM, COMPARTMNT) %>% summarize(
-    n_stations = length(unique(station_id)), temp = mean(temp, na.rm=T)) %>% ungroup()
-mapview(vri_2020_weather_interp_custom, zcol = "temp", legend = TRUE)
-
-vri_2020_weather_interp_auto = weathercan::weather_interp(
-  data = vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb, 
-  weather = ok_stationx1_sf, cols=c("temp", "precip_amt", "rel_hum", "wind_spd"), interval = "day", 
-  na_gap = 2)
-
-class(vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb$date)
-class(ok_stationx1_sf$date)
-
-#ok_stationsx2Radius30km = weather_dl(station_ids = c(50269, 979), start="2021-07-31", end="2021-07-31")
-#ok_stationsx1Radius10km = weather_dl(station_ids = c(50269), start="2021-07-31", end="2021-07-31")
-#ok_stationsx2Radius30km_sampled = dplyr::select(ok_stationsx2Radius30km,
- #                                               station_id, lat, lon, date, 
-  #                                              temp, precip_amt, 
-   #                                             rel_hum, wind_spd)
-#ok_stationsx1Radius10km_sampled = dplyr::select(ok_stationsx1Radius10km,
- #                                               station_id, lat, lon, date, 
-  #                                              temp, precip_amt, 
-   #                                             rel_hum, wind_spd)
-
-vri_ok_2020_with_weather = weathercan::weather_interp(
-  data = vri_ok_2020_waterSub_hydrometric_cutblocks_burns_mpb,
-  weather = ok_stationsx1Radius100km_sampled_20210731,
-  cols=c("temp", "precip_amt", "rel_hum", "wind_spd"), na_gap = 1)
-  
-
-summary(vri_ok_2020_with_weather)
-ggplot(data = vri_ok_2020_with_weather, aes(x = temp, fill = FEATURE_ID)) +
-                           theme_bw() +
-                           theme(legend.position = "none") +
-                           geom_histogram(binwidth = 1) +
-                           labs(x = "Temperature (C)", y = "Cutblock ID", fill = "AREAHA")
+fwi_ISI_interp <- interpolate(
+  grd_template_raster, fwi_ISI_idw)
+fwi_ISI_stars = stars::st_as_stars(fwi_ISI_interp)
+fwi_ISI_sf = sf::st_as_sf(fwi_ISI_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_ISI_sf, crs=st_crs(aoi)) 
+fwi_ISI_sf = rename(fwi_ISI_sf, ISI = var1.pred) 
 
 
-vri_ok_2020_comp_temp_rh = vri_ok_2020_comp_temp %>%
-  st_join(vri_ok_2020_comp_temp, ok_stationsx1Radius100km_sampled_20210731) %>%
-  group_by(SRCNM) %>%
-  summarize(n_stations = length(unique(station_id)),
-            rel_hum = mean(rel_hum, na.rm = TRUE)) %>% ungroup()
+fwi_BUI_idw <- gstat::gstat(
+  formula= BUI ~ 1, 
+  data = as(fwi_BUI, "Spatial"),
+  set=list(idp=2.0)
+  )
 
-vri_ok_2020_comp_temp_rh_prec = vri_ok_2020_comp_temp_rh %>%
-  st_join(vri_ok_2020_comp_temp_rh, ok_stationsx1Radius100km_sampled_20210731) %>%
-  group_by(SRCNM) %>%
-  summarize(n_stations = length(unique(station_id)),
-            precip_amt = mean(precip_amt, na.rm = TRUE)) %>% ungroup()
-
-vri_ok_2020_comp_temp_rh_prec_ws = vri_ok_2020_comp_temp_rh_prec %>%
-  st_join(vri_ok_2020_comp_temp_rh_prec, ok_stationsx1Radius100km_sampled_20210731) %>%
-  group_by(SRCNM) %>%
-  summarize(n_stations = length(unique(station_id)),
-            wind_spd = mean(wind_spd, na.rm = TRUE)) %>% ungroup()
-
-mapview(vri_ok_2020_comp_temp_rh_prec_ws, zcol = "wind_spd", legend = TRUE)
-view(vri_ok_2020_comp_temp_rh_prec_ws)
-saveRDS(vri_ok_2020_comp_temp_rh_prec_ws, "wildfire_cabin_df_v1.RDS")
-
-## Generate Panel 3 Indicator: CFFDRS FBP maps
+fwi_BUI_interp <- interpolate(
+  grd_template_raster, fwi_BUI_idw)
+fwi_BUI_stars = stars::st_as_stars(fwi_BUI_interp)
+fwi_BUI_sf = sf::st_as_sf(fwi_BUI_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_BUI_sf, crs=st_crs(aoi)) 
+fwi_BUI_sf = rename(fwi_BUI_sf, BUI = var1.pred) 
 
 
-# Generate interactive map and labelling functions
+fwi_FWI_idw <- gstat::gstat(
+  formula= FWI ~ 1, 
+  data = as(fwi_FWI, "Spatial"),
+  set=list(idp=2.0)
+  )
+
+fwi_FWI_interp <- interpolate(
+  grd_template_raster, fwi_FWI_idw)
+fwi_FWI_stars = stars::st_as_stars(fwi_FWI_interp)
+fwi_FWI_sf = sf::st_as_sf(fwi_FWI_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_FWI_sf, crs=st_crs(aoi)) 
+fwi_FWI_sf = rename(fwi_FWI_sf, FWI = var1.pred) 
+
+
+fwi_FFMC_idw <- gstat::gstat(
+  formula= FFMC ~ 1, 
+  data = as(fwi_FFMC, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fwi_FFMC_interp <- interpolate(
+  grd_template_raster, fwi_FFMC_idw)
+fwi_FFMC_stars = stars::st_as_stars(fwi_FFMC_interp)
+fwi_FFMC_sf = sf::st_as_sf(fwi_FFMC_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_FFMC_sf, crs=st_crs(aoi)) 
+fwi_FFMC_sf = rename(fwi_FFMC_sf, FFMC = var1.pred) 
+
+
+fwi_DMC_idw <- gstat::gstat(
+  formula= DMC ~ 1, 
+  data = as(fwi_DMC, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fwi_DMC_interp <- interpolate(
+  grd_template_raster, fwi_DMC_idw)
+fwi_DMC_stars = stars::st_as_stars(fwi_DMC_interp)
+fwi_DMC_sf = sf::st_as_sf(fwi_DMC_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_DMC_sf, crs=st_crs(aoi)) 
+fwi_DMC_sf = rename(fwi_DMC_sf, DMC = var1.pred) 
+
+
+fwi_DC_idw <- gstat::gstat(
+  formula= DC ~ 1, 
+  data = as(fwi_DC, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fwi_DC_interp <- interpolate(
+  grd_template_raster, fwi_DC_idw)
+fwi_DC_stars = stars::st_as_stars(fwi_DC_interp)
+fwi_DC_sf = sf::st_as_sf(fwi_DC_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fwi_DC_sf, crs=st_crs(aoi)) 
+fwi_DC_sf = rename(fwi_DC_sf, DC = var1.pred) 
+
+master_sf_interp = st_join(master_sf, fwi_ISI_sf, largest=T)
+master_sf_interp = st_join(master_sf, fwi_BUI_sf, largest=T)
+master_sf_interp = st_join(master_sf, fwi_FWI_sf, largest=T)
+master_sf_interp = st_join(master_sf, fwi_FFMC_sf, largest=T)
+master_sf_interp = st_join(master_sf, fwi_DMC_sf, largest=T)
+master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T)
+
+
+
+# Fire Behaviour Prediction Mapping
+library(elevatr) 
+ELV = get_elev_raster(aoi, z=8)
+GS = slopeAspect(ELV, filename = "./Data/GS.tif", out='slope', unit='radians', neighbors=8, overwrite=TRUE)
+GS = terra::rast(GS) 
+GS = terra::as.polygons(GS)%>% st_as_sf()
+
+Aspect = slopeAspect(ELV, filename = "./Data/Aspect.tif", out='aspect', unit='radians', neighbors=8, overwrite=TRUE)
+Aspect = terra::rast(Aspect)
+Aspect = terra::as.polygons(Aspect) %>% st_as_sf()
+master_sf = st_join(master_sf, ELV, largest=T)
+master_sf = st_join(master_sf, GS, largest=T)
+master_sf = st_join(master_sf, Aspect, largest=T)
+
+
+fbp_input = as.data.frame(
+  master_sf[c("FEATURE_ID", "fueltype", "FFMC", "BUI", "WS", "DJ", "WS", "ELV", "GS", "Aspect")]) 
+fbp_input = rename(fbp_input, id = FEATURE_ID) 
+fbp_input = fbp_input %>% 
+  mutate(lat = unlist(map(fbp_input$geometry,1)),
+         long = unlist(map(fbp_input$geometry,2)))
+
+fbp_out1 = cffdrs::fbp(fbp_input, output = "Primary")
+fbp_out2 = cffdrs::fbp(fbp_input, output = "Secondary")
+fbp_outAll = cffdrs::fbp(fbp_input, output = "All")
+
+#FD: S=Surface, I=Intermittent, C=Crown
+fbp_FD = fbp_out1["FD"] 
+fbp_CFC = fbp_out1["CFC"]
+fbp_HFI = fbp_out1["HFI"]
+fbp_RAZ = fbp_out1["RAZ"]
+fbp_ROS = fbp_out1["ROS"]
+fbp_SFC = fbp_out1["SFC"]
+fbp_TFC = fbp_out1["TFC"]
+
+fbp_FD_idw <- gstat::gstat(
+  formula= FD ~ 1, 
+  data = as(fbp_FD, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fbp_FD_interp <- interpolate(
+  grd_template_raster, fbp_FD_idw)
+fbp_FD_stars = stars::st_as_stars(fbp_FD_interp)
+fbp_FD_sf = sf::st_as_sf(fbp_FD_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fbp_FD_sf, crs=st_crs(aoi)) 
+fbp_FD_sf = rename(fbp_FD_sf, FD = var1.pred) 
+
+fbp_CFC_idw <- gstat::gstat(
+  formula= CFC ~ 1, 
+  data = as(fbp_CFC, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fbp_CFC_interp <- interpolate(
+  grd_template_raster, fbp_CFC_idw)
+fbp_CFC_stars = stars::st_as_stars(fbp_CFC_interp)
+fbp_CFC_sf = sf::st_as_sf(fbp_CFC_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fbp_CFC_sf, crs=st_crs(aoi)) 
+fbp_CFC_sf = rename(fbp_CFC_sf, FD = var1.pred) 
+
+
+fbp_HFI_idw <- gstat::gstat(
+  formula= HFI ~ 1, 
+  data = as(fbp_HFI, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fbp_HFI_interp <- interpolate(
+  grd_template_raster, fbp_HFI_idw)
+fbp_HFI_stars = stars::st_as_stars(fbp_HFI_interp)
+fbp_HFI_sf = sf::st_as_sf(fbp_HFI_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fbp_HFI_sf, crs=st_crs(aoi)) 
+fbp_HFI_sf = rename(fbp_HFI_sf, HFI = var1.pred) 
+
+
+fbp_RAZ_idw <- gstat::gstat(
+  formula= RAZ ~ 1, 
+  data = as(fbp_RAZ, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fbp_RAZ_interp <- interpolate(
+  grd_template_raster, fbp_RAZ_idw)
+fbp_RAZ_stars = stars::st_as_stars(fbp_RAZ_interp)
+fbp_RAZ_sf = sf::st_as_sf(fbp_RAZ_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fbp_RAZ_sf, crs=st_crs(aoi)) 
+fbp_RAZ_sf = rename(fbp_RAZ_sf, RAZ = var1.pred) 
+
+
+fbp_ROS_idw <- gstat::gstat(
+  formula= ROS ~ 1, 
+  data = as(fbp_ROS, "Spatial"),
+  set=list(idp=2.0)
+)
+
+fbp_ROS_interp <- interpolate(
+  grd_template_raster, fbp_ROS_idw)
+fbp_ROS_stars = stars::st_as_stars(fbp_ROS_interp)
+fbp_ROS_sf = sf::st_as_sf(fbp_ROS_stars, 
+  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+  st_transform(fbp_ROS_sf, crs=st_crs(aoi)) 
+fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred) 
+
+
+master_sf_interp = st_join(master_sf, fbp_FD_sf, largest=T)
+master_sf_interp = st_join(master_sf, fbp_CFC_sf, largest=T)
+master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
+master_sf_interp = st_join(master_sf, fbp_RAZ_sf, largest=T)
+master_sf_interp = st_join(master_sf, fbp_ROS_sf, largest=T)
+
+saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
+master_sf_interp = readRDS("./app/master_sf_interp.RDS")
+
+
+#labelling rules for map functions
 labels = sprintf(
-  "<strong>%s</strong><br/>%g fuel type",
-  vri_ok_2020_comp_temp_rh_prec_ws$FEATURE_ID, vri_ok_2020_comp_temp_rh_prec_ws$fueltype) %>%
+  "<strong>%s</strong><br/>%g fuel class",
+  master_sf_interp$id, master_sf_interp$fueltype) %>%
+  leaflet() %>%
   lapply(htmltools::HTML)
 
-
-#pal = colorBin(palette="OrRd", 9, domain = wildfire_cabin_df_v1$fueltype)
-
-#map_interactive = wildfire_cabin_df_v1 %>% 
-#  st_transform(crs = "+init=epsg:4326") %>% 
-#  leaflet() %>%
-#  addProviderTiles(provider = "CartoDB.Positron") %>%
-#  addPolygons(label = labels,
-#              stroke = FALSE,
-#              smoothFactor = 0.5,
-#              opacity = 1,
-#              fillOpacity = 0.7,
-#              fillColor = ~ pal(fueltype),
-#              highlightOptions = highlightOptions(weight = 5,
-#                                                  fillOpacity = 1,
-#                                                  color = "black",
-#                                                  opacity = 1,
-#                                                  bringToFront = TRUE))
+)
 
 
+#setup map labelling rules
+labels = sprintf("<strong>%s</strong><br/>%s fuel class",
+  master_sf_interp$id, as.character(master_sf_interp$fueltype)) %>%
+  leaflet() %>%
+  lapply(htmltools::HTML)
 
+pal = colorBin(palette = "OrRd", 16, domain = master_sf_interp$fueltype)
 
+#setup map #?addProviderTiles
 
+map_interactive = master_sf_interp %>%
+  providers <- c("Stamen.TonerLite", "CartoDB.Positron", "Esri.WorldImagery", "NASAGIBS.ModisTerraTrueColorCR") %>%
+  map = leaflet() %>%
+  map_interactive = addProviderTiles(provider = "CartoDB.Positron") %>%
+  addPolygons(label = labels,
+              stroke = FALSE,
+              smoothFactor = 0.5,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~ pal(fueltype),
+              highlightOptions = highlightOptions(
+                weight = 5,
+                fillOpacity = 1,
+                color = "black", 
+                opacity = 1, 
+                bringToFront = TRUE)) %>%
+  
+  addLegend("bottomright",
+            pal = pal,
+            values = ~ fueltype,
+            title = "Fuel Type",
+            opacity=0.7)
 
-
-
-
-
-
-
-
-# nasapower pipeline
-library("nasapower")
-daily_single_ag <- get_power(
-  community = "ag",
-  lonlat = c(-122.25, 48.5, -116.25, 52.5),
-  pars = c("RH2M", "T2M", "PRECTOTCORR", "WS10M"),
-  dates = c("2021-07-31", "2021-07-31"),
-  temporal_api = "daily")
-
-climate_ok_20210731_sf = st_as_sf(daily_single_ag, coords = c("LON", "LAT"), crs = "+proj=longlat") # %>% st_transform(climate_ok_20210731_sf, crs=st_crs(aoi)) 
-st_crs(climate_ok_20210731_sf) # = crs/epsg:9122/wgs84 - st_transform(climate_ok_20210731_sf, crs = "+init=epsg:9122")
-climate_ok_20210731_sf <- st_transform(climate_ok_20210731_sf, "+proj=longlat +datum=WGS84")
-climate_ok_20210731_ext = ext(vect(climate_ok_20210731_sf))
-climate_ok_20210731_sp <- as(climate_ok_20210731_sf, Class = 'Spatial')
-raster_template <- rast()
-raster_template <- rast(nrows=150, ncols=50, nlyr=1, xmin=-122.25, xmax=-116.25, ymin=48.75, ymax=52.25)
-res(raster_template) = 100
-
-                        #, crs=st_crs(climate_ok_20210731_sf), res=100)
-
-raster_template = rast(vect(climate_ok_20210731_ext), resolution = 1000, crs = st_crs(climate_ok_20210731_sf)) # template for rasterization
-species_class_rast = terra::rasterize(vect(vri_species_aoi), raster_template, field = "species_class", touches = TRUE)
-species_class_raster = raster::raster(species_class_rast)
-writeRaster(species_class_raster, filename = "./Data/Raster_Covariates/UnMasked/species_class_raster.tif", overwrite=TRUE)
-species_class_raster = raster::raster("./Data/Raster_Covariates/UnMasked/species_class_raster.tif")
-
-climate_ok_20210731_raster <- rasterize(climate_ok_20210731_sp, r, 'name', fun=min)
-
-climate_ok_20210731_raster = rasterize(vect(climate_ok_20210731_sf))
-climate_ok_20210731_raster = stars::st_rasterize(climate_ok_20210731_sf)
-
-                                                 , template = st_as_stars(st_bbox(climate_ok_20210731_sf)), values = NA_real_)
-class(climate_ok_20210731_raster)
-x = st_rasterize(nc)
-raster_template = raster::raster(climate_ok_20210731_raster)
-
-#raster_template = rast(ext(climate_ok_20210731_sf), resolution = 100, crs = "+proj=longlat +datum=WGS84") # template for rasterization
-raster_template = raster::raster(raster_template)
-#st_transform(crs = "+init=epsg:4326") %>% 
-
-
-temp = climate_ok_20210731_sf["T2M"]
-temp = dplyr::rename(temp, temp = T2M)
-rh = climate_ok_20210731_sf["RH2M"]
-rh = dplyr::rename(rh, rh = RH2M)
-ws = climate_ok_20210731_sf["WS10M"]
-ws = dplyr::rename(ws, ws = WS10M)
-prec = climate_ok_20210731_sf["PRECTOTCORR"]
-prec = dplyr::rename(prec, prec = PRECTOTCORR)
-
-
-temp_cast = st_cast(st_cast(temp, 'MULTIPOINT'), 'POINT')
-temp_raster = rasterize(as(temp_cast, 'Spatial'), raster_template, field='temp')
-rh_cast = st_cast(st_cast(rh, 'MULTIPOINT'), 'POINT')
-rh_raster = rasterize(as(rh_cast, 'Spatial'), raster_template, field='rh')
-ws_cast = st_cast(st_cast(ws, 'MULTIPOINT'), 'POINT')
-ws_raster = rasterize(as(ws_cast, 'Spatial'), raster_template, field='ws')
-prec_cast = st_cast(st_cast(prec, 'MULTIPOINT'), 'POINT')
-prec_raster = rasterize(as(prec_cast, 'Spatial'), raster_template, field='prec')
-
-library(cffdrs)
-raster::writeRaster(temp_raster, filename = "./Data/climate/temp_raster.tif", overwrite=TRUE)
-raster::writeRaster(rh_raster, filename = "./Data/climate/rh_raster.tif", overwrite=TRUE)
-raster::writeRaster(ws_raster, filename = "./Data/climate/ws_raster.tif", overwrite=TRUE)
-raster::writeRaster(prec_raster, filename = "./Data/climate/prec_raster.tif", overwrite=TRUE)
-temp = raster::raster("./Data/climate/temp_raster.tif")
-rh = raster::raster("./Data/climate/rh_raster.tif")
-ws = raster::raster("./Data/climate/ws_raster.tif")
-prec = raster::raster("./Data/climate/prec_raster.tif")
-names(temp) = 'temp'
-names(rh) = 'rh'
-names(ws) = 'ws'
-names(prec) = 'prec'
-
-stack = stack(temp, rh, ws, prec)
-fwiRasters = fwiRaster(stack, out='all')
-cffdrs::fwiRaster(stack, out = "all")
-graphics.off()
-plot(fwiRasters)
-
-
-
-
-
-day01src <- system.file("extdata","test_rast_day01.tif",package="cffdrs")
-day01 <- stack(day01src)
-day01 <- crop(day01,c(250,255,47,51))
-names(day01)<-c("temp","rh","ws","prec")
-
-
-
-
-
-
-
-
-
-# weatherCan piping (library=weathercan)
-bc <- bc_bound()
-bcmap_crs = crs(bc)
-rd <- regional_districts()
-summary.factor(rd$ADMIN_AREA_NAME)
-ok_similK = rd[rd$ADMIN_AREA_NAME=="Regional District of Okanagan-Similkameen", ]
-ok_central = rd[rd$ADMIN_AREA_NAME=="Regional District of Central Okanagan", ]
-ok_north = rd[rd$ADMIN_AREA_NAME=="Regional District of North Okanagan", ]
-kamloops_FC = 
-  plot(st_geometry(bc))
-plot(st_geometry(ok_similK), col = "lightseagreen", add = TRUE)
-plot(st_geometry(ok_north), col = "blue", add = TRUE)
-plot(st_geometry(ok_central), col = "green", add = TRUE)
-
-kamloopsFC = sf::read_sf("./Data/fire-centres/fire-centres-kamloops/DRPMFFRCNT_polygon.shp")
-kamloopsFC = dplyr::rename(kamloopsFC, Kamloops_Fire_Centre = MFFRCNTRNM)
-kamloopsFC = kamloopsFC[1, "Kamloops_Fire_Centre"]
-plot(kamloopsFC, col="lightseagreen", add=TRUE)
-plot(aoi, col="blue", add=T)
-
-stations_dl() #update stations function
-stations_meta() # check last update
+  map_interactive = addProviderTiles(provider = "CartoDB.Positron") %>%
+  addPolygons(label = labels,
+              stroke = FALSE,
+              smoothFactor = 0.5,
+              opacity = 1,
+              fillOpacity = 0.7,
+              fillColor = ~ pal(fueltype),
+              highlightOptions = highlightOptions(
+                weight = 5,
+                fillOpacity = 1,
+                color = "black", 
+                opacity = 1, 
+                bringToFront = TRUE)) %>%
+  
+  addLegend("bottomright",
+            pal = pal,
+            values = ~ fueltype,
+            title = "Fuel Type",
+            opacity=0.7)
