@@ -10,7 +10,6 @@ library(rgdal)
 library(cffdrs)
 library(nasapower)
 library(stars)
-library(rgeos)
 # Run static lint intermittently in local script environment
 # lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
 
