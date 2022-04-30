@@ -1,31 +1,40 @@
 
 #Action: Pipeline for the Cabin Wildfire Fuel Type and Readiness Data PLatform
 library(leaflet)
-library(tidyverse)
-library(sf)
-library(raster)
 library(tibble)
+library(dplyr)
+library(raster)
 library(terra)
+library(stars)
 library(rgdal)
+library(sf)
+library(gstat)
+library(PROJ)
 library(cffdrs)
 library(nasapower)
-library(stars)
+library(elevatr)
+library(devtools)
+#library(usethis)
+#usethis::edit_r_environ()
+#update.packages() # update installed CRAN packages
+
 # Run static lint intermittently in local script environment
 # lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
-
+#vri_ok_2020 = readRDS("./Data/vri_ok_2020.RDS")
 
 ## Import AOI files
 aoi = sf::read_sf("./Data/hydrology/watersheds/watershed_okanagan.shp")
 aoi = dplyr::rename(aoi, Okanagan_Watershed = WTRSHDGRPC)
 aoi = aoi[1, "Okanagan_Watershed"]
 base::plot(aoi)
+st_crs(aoi)
 
 # Import VRI current and historical datasets
-vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/vri-ok-2020-wide/VEG_R1_PLY_polygon_wide.shp")
+vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
 vri_ok_2020 = vri_ok_2020[c("FEATURE_ID", "BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE", "COMPARTMNT")]
 vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
-plot(st_geometry(vri_ok_2020))
-glimpse(vri_ok_2020)
+#plot(st_geometry(vri_ok_2020))
+#glimpse(vri_ok_2020)
 
 vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
 vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
@@ -677,7 +686,6 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="v"|
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="SBS" ~ "1" )
   )
-
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C4 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>20 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & CR_CLOSURE>=55 & BEC_SZONE=="dc" & DEAD_PCT>34 |
@@ -2288,6 +2296,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_O1 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT<20130000 & HRVSTDT>19960000 & (BEC_ZONE=="PP" | BEC_ZONE=="MS" | BEC_ZONE=="BG" | BEC_ZONE=="IDF") ~ "1" ) 
   )
 
+
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(fueltype = case_when(
     fuel_N=="1" ~ "N",
@@ -2307,60 +2316,42 @@ vri_ok_2020 = vri_ok_2020 %>%
     fuel_O1=="1" ~ "O1a/b" )
     )
 
-vri_ok_2020$fueltype[is.na(vri_ok_2020$fueltype)] = "N"
 summary.factor(vri_ok_2020$fueltype)
 
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(fire_centre = case_when(
     Okanagan_Watershed!="NA" ~ "Kamloops" ) 
-    )
-  
+  )
+
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(watershed = case_when(
     Okanagan_Watershed!="NA" ~ "Okanagan" ) 
-    )
+  )
 
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(week_ending = case_when(
     Okanagan_Watershed!="NA" ~ "20210731" ) 
   )
 
-vri_ok_2020$week_ending = as.Date(
-  vri_ok_2020$week_ending, format = "%Y/%m/%d")
-class(vri_ok_2020$week_ending)
-
-watershed_subDrainages = sf::read_sf("./Data/hydrology/watersheds/watershed_bc_drainages/EABC_EC_DR_polygon.shp")
-watershed_hydrometrics = sf::read_sf("./Data/hydrology/watersheds/watershed_bc_drainages/HYD_WB_PLY_polygon.shp")
-watershed_subDrainages = sf::st_intersection(sf::st_make_valid(watershed_subDrainages), aoi) 
-watershed_hydrometrics = sf::st_intersection(sf::st_make_valid(watershed_hydrometrics), aoi) 
-watershed_subDrainages = watershed_subDrainages["EDU"] 
-watershed_hydrometrics = watershed_hydrometrics["SRCNM"] 
-
-vri_ok_2020_waterSub = st_join(vri_ok_2020, watershed_subDrainages, largest = TRUE)
-vri_ok_2020_waterSub_hydrometric = st_join(vri_ok_2020_waterSub, watershed_hydrometrics, largest = TRUE)
 
 cutblocks = sf::read_sf("./Data/cutblocks/cutblocks_kamloops_fire_centre/CNS_CUT_BL_polygon.shp")
 cutblocks_kamloopsFC = sf::st_intersection(sf::st_make_valid(cutblocks), aoi)
 cutblocks_kamloopsFC = cutblocks_kamloopsFC[c("CUTBLOCKID", "HARVESTYR", "AREAHA", "DSTRBEDDT")] 
-vri_ok_2020_waterSub_hydrometric_cutblocks = st_join(
-  vri_ok_2020_waterSub_hydrometric, cutblocks_kamloopsFC, largest = TRUE)
 
 burns_BC = sf::read_sf("./Data/burns/burns-historical/H_FIRE_PLY_polygon.shp")
 burns_kamloopsFC = sf::st_intersection(sf::st_make_valid(burns_BC), aoi)
 burns_kamloopsFC = burns_kamloopsFC[c("FIRE_YEAR", "FIRE_DATE", "FIRELABEL")]
-vri_ok_2020_waterSub_hydrometric_cutblocks_burns = st_join(
-  vri_ok_2020_waterSub_hydrometric_cutblocks, burns_kamloopsFC, largest = TRUE)
 
 mpb = sf::read_sf("./Data/pests/beetle-mpb/FADM_MPBSA_polygon.shp")
 mpb_kamloopsFC = sf::st_intersection(sf::st_make_valid(mpb), aoi)
 mpb_kamloopsFC = mpb_kamloopsFC[c("FFCTVDT", "LGSLTNFLNM", "FTRCD")]
 
-master_sf = st_join(vri_ok_2020_waterSub_hydrometric_cutblocks_burns, 
-                    mpb_kamloopsFC, largest = TRUE)
+master_sf = st_join(vri_ok_2020, cutblocks_kamloopsFC, largest = TRUE)
+master_sf = st_join(master_sf, burns_kamloopsFC, largest = TRUE)
+master_sf = st_join(master_sf, mpb_kamloopsFC, largest = TRUE)
 
 
-
-# Begin Fire Weather Mapping: nasapower API piped directly without need for key
+# Fire Weather Metrics: nasapower-API
 climate_vars_daily = get_power(community = "ag",
                           lonlat = c(-122.25, 48.5, -116.25, 52.5),
                           pars = c("RH2M", "T2M", "PRECTOTCORR", "WS10M"),
@@ -2497,9 +2488,9 @@ fwi_DC_sf = sf::st_as_sf(fwi_DC_stars,
   st_transform(fwi_DC_sf, crs=st_crs(aoi)) 
 fwi_DC_sf = rename(fwi_DC_sf, DC = var1.pred) 
 
-
-# master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
 # need to back-edit these with future coding to replace with current master file 
+# master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
+master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
 master_sf_interp = st_join(master_sf_interp, fwi_ISI_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fwi_BUI_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fwi_FWI_sf, largest=T)
@@ -2507,163 +2498,143 @@ master_sf_interp = st_join(master_sf_interp, fwi_FFMC_sf, largest=T)
 master_sf_interp = st_join(master_sf_interp, fwi_DMC_sf, largest=T)
 
 
-# Fire Behaviour Prediction Mapping
+  # Fire Behaviour Prediction Mapping`
 library(elevatr) 
+library(rgeos)
+
 ELV = get_elev_raster(aoi, z=8)
+terra::writeRaster(ELV, filename = "./Data/ELV.tif", overwrite=TRUE)
+
 GS = slopeAspect(ELV, filename = "./Data/GS.tif", out='slope', unit='radians', neighbors=8, overwrite=TRUE)
 GS = terra::rast(GS) 
-GS = terra::as.polygons(GS)%>% st_as_sf()
+GS = terra::mask(GS, vect(aoi))
+GS = terra::as.polygons(GS) %>% 
+  st_as_sf()
 
 Aspect = slopeAspect(ELV, filename = "./Data/Aspect.tif", out='aspect', unit='radians', neighbors=8, overwrite=TRUE)
 Aspect = terra::rast(Aspect)
-Aspect = terra::as.polygons(Aspect) %>% st_as_sf()
-master_sf = st_join(master_sf, ELV, largest=T)
-master_sf = st_join(master_sf, GS, largest=T)
-master_sf = st_join(master_sf, Aspect, largest=T)
+Aspect = terra::mask(Aspect, vect(aoi))
+Aspect = terra::as.polygons(Aspect) %>% 
+  st_as_sf()
 
-fbp_input = as.data.frame(
+ELV = terra::rast(ELV) 
+ELV = terra::mask(ELV, vect(aoi))
+ELV = terra::as.polygons(ELV) %>% 
+  st_as_sf()
+
+master_sf_interp_df = dplyr::full_join(as_tibble(master_sf_interp), as_tibble(GS), as_tibble(Aspect), by = "geometry")
+master_sf_interp = sf::st_as_sf(master_sf_interp_df)
+
+fwi_input = climate_vars_daily[c("LONG", "LAT", "YR", "MON", "DAY", "Dj", "TEMP", "RH", "WS", "PREC")] 
+
+fbp_input = [c()]
 fbp_input = rename(fbp_input, id = FEATURE_ID) 
-fbp_input = fbp_input %>% 
-  mutate(lat = unlist(map(fbp_input$geometry,1)),
-         long = unlist(map(fbp_input$geometry,2)))
-
-fbp_out1 = cffdrs::fbp(fbp_input, output = "Primary")
-fbp_out2 = cffdrs::fbp(fbp_input, output = "Secondary")
-fbp_outAll = cffdrs::fbp(fbp_input, output = "All")
-
-#FD: S=Surface, I=Intermittent, C=Crown
-fbp_FD = fbp_out1["FD"] 
-fbp_CFC = fbp_out1["CFC"]
-fbp_HFI = fbp_out1["HFI"]
-fbp_RAZ = fbp_out1["RAZ"]
-fbp_ROS = fbp_out1["ROS"]
-fbp_SFC = fbp_out1["SFC"]
-fbp_TFC = fbp_out1["TFC"]
-
-fbp_FD_idw <- gstat::gstat(
-  formula= FD ~ 1, 
-  data = as(fbp_FD, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fbp_FD_interp <- interpolate(
-  grd_template_raster, fbp_FD_idw)
-fbp_FD_stars = stars::st_as_stars(fbp_FD_interp)
-fbp_FD_sf = sf::st_as_sf(fbp_FD_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fbp_FD_sf, crs=st_crs(aoi)) 
-fbp_FD_sf = rename(fbp_FD_sf, FD = var1.pred) 
-
-fbp_CFC_idw <- gstat::gstat(
-  formula= CFC ~ 1, 
-  data = as(fbp_CFC, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fbp_CFC_interp <- interpolate(
-  grd_template_raster, fbp_CFC_idw)
-fbp_CFC_stars = stars::st_as_stars(fbp_CFC_interp)
-fbp_CFC_sf = sf::st_as_sf(fbp_CFC_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fbp_CFC_sf, crs=st_crs(aoi)) 
-fbp_CFC_sf = rename(fbp_CFC_sf, FD = var1.pred) 
-
-
-fbp_HFI_idw <- gstat::gstat(
-  formula= HFI ~ 1, 
-  data = as(fbp_HFI, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fbp_HFI_interp <- interpolate(
-  grd_template_raster, fbp_HFI_idw)
-fbp_HFI_stars = stars::st_as_stars(fbp_HFI_interp)
-fbp_HFI_sf = sf::st_as_sf(fbp_HFI_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fbp_HFI_sf, crs=st_crs(aoi)) 
-fbp_HFI_sf = rename(fbp_HFI_sf, HFI = var1.pred) 
-
-
-fbp_RAZ_idw <- gstat::gstat(
-  formula= RAZ ~ 1, 
-  data = as(fbp_RAZ, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fbp_RAZ_interp <- interpolate(
-  grd_template_raster, fbp_RAZ_idw)
-fbp_RAZ_stars = stars::st_as_stars(fbp_RAZ_interp)
-fbp_RAZ_sf = sf::st_as_sf(fbp_RAZ_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fbp_RAZ_sf, crs=st_crs(aoi)) 
-fbp_RAZ_sf = rename(fbp_RAZ_sf, RAZ = var1.pred) 
-
-
-fbp_ROS_idw <- gstat::gstat(
-  formula= ROS ~ 1, 
-  data = as(fbp_ROS, "Spatial"),
-  set=list(idp=2.0)
-)
-
-summary.factor(master_sf_interp$fueltype)
-
-fbp_ROS_interp <- interpolate(
-  grd_template_raster, fbp_ROS_idw)
-fbp_ROS_stars = stars::st_as_stars(fbp_ROS_interp)
-fbp_ROS_sf = sf::st_as_sf(fbp_ROS_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fbp_ROS_sf, crs=st_crs(aoi)) 
-fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred) 
-
-
-#master_sf_interp = st_join(master_sf, fbp_FD_sf, largest=T)
-#master_sf_interp = st_join(master_sf_interp, fbp_CFC_sf, largest=T)
-#master_sf_interp = st_join(master_sf_interp, fbp_ROS_sf, largest=T)
-master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
-master_sf_interp = st_join(master_sf_interp, fbp_RAZ_sf, largest=T)
-
-library(dplyr)
-summary.factor(master_sf_interp$Okanagan_Watershed)
-
-master_sf_interp = master_sf_interp %>% 
-  dplyr::mutate(week_ending = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
-
-master_sf_interp = master_sf_interp %>% 
-  dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
-
-master_sf_interp$week_ending <- as.Date(
-  as.character(master_sf_interp$week_ending), format = "%Y%m%d")
-
-master_sf_interp$date <- as.Date(
-  as.character(master_sf_interp$date), format = "%Y%m%d")
-
-master_sf_interp$date <- as.Date(as.character(master_sf_interp$date), format = "%Y%m%d")
-master_sf_interp$week_ending
-master_sf_interp$date
-
-saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
-master_sf_interp = readRDS("./app/master_sf_interp.RDS")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+  fbp_input = fbp_input %>% 
+    mutate(lat = unlist(map(fbp_input$geometry,1)),
+           long = unlist(map(fbp_input$geometry,2)))
+  
+  fbp_out1 = cffdrs::fbp(fbp_input, output = "Primary")
+  fbp_out2 = cffdrs::fbp(fbp_input, output = "Secondary")
+  fbp_outAll = cffdrs::fbp(fbp_input, output = "All")
+  
+  #FD: S=Surface, I=Intermittent, C=Crown
+  fbp_FD = fbp_out1["FD"] 
+  fbp_CFC = fbp_out1["CFC"]
+  fbp_HFI = fbp_out1["HFI"]
+  fbp_RAZ = fbp_out1["RAZ"]
+  fbp_ROS = fbp_out1["ROS"]
+  fbp_SFC = fbp_out1["SFC"]
+  fbp_TFC = fbp_out1["TFC"]
+  
+  fbp_FD_idw <- gstat::gstat(
+    formula= FD ~ 1, 
+    data = as(fbp_FD, "Spatial"),
+    set=list(idp=2.0)
+  )
+  
+  fbp_FD_interp <- interpolate(
+    grd_template_raster, fbp_FD_idw)
+  fbp_FD_stars = stars::st_as_stars(fbp_FD_interp)
+  fbp_FD_sf = sf::st_as_sf(fbp_FD_stars, 
+    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+    st_transform(fbp_FD_sf, crs=st_crs(aoi)) 
+  fbp_FD_sf = rename(fbp_FD_sf, FD = var1.pred) 
+  
+  fbp_CFC_idw <- gstat::gstat(
+    formula= CFC ~ 1, 
+    data = as(fbp_CFC, "Spatial"),
+    set=list(idp=2.0)
+  )
+  
+  fbp_CFC_interp <- interpolate(
+    grd_template_raster, fbp_CFC_idw)
+  fbp_CFC_stars = stars::st_as_stars(fbp_CFC_interp)
+  fbp_CFC_sf = sf::st_as_sf(fbp_CFC_stars, 
+    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+    st_transform(fbp_CFC_sf, crs=st_crs(aoi)) 
+  fbp_CFC_sf = rename(fbp_CFC_sf, FD = var1.pred) 
+  
+  
+  fbp_HFI_idw <- gstat::gstat(
+    formula= HFI ~ 1, 
+    data = as(fbp_HFI, "Spatial"),
+    set=list(idp=2.0)
+  )
+  
+  fbp_HFI_interp <- interpolate(
+    grd_template_raster, fbp_HFI_idw)
+  fbp_HFI_stars = stars::st_as_stars(fbp_HFI_interp)
+  fbp_HFI_sf = sf::st_as_sf(fbp_HFI_stars, 
+    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+    st_transform(fbp_HFI_sf, crs=st_crs(aoi)) 
+  fbp_HFI_sf = rename(fbp_HFI_sf, HFI = var1.pred) 
+  
+  
+  fbp_RAZ_idw <- gstat::gstat(
+    formula= RAZ ~ 1, 
+    data = as(fbp_RAZ, "Spatial"),
+    set=list(idp=2.0)
+  )
+  
+  fbp_RAZ_interp <- interpolate(
+    grd_template_raster, fbp_RAZ_idw)
+  fbp_RAZ_stars = stars::st_as_stars(fbp_RAZ_interp)
+  fbp_RAZ_sf = sf::st_as_sf(fbp_RAZ_stars, 
+    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+    st_transform(fbp_RAZ_sf, crs=st_crs(aoi)) 
+  fbp_RAZ_sf = rename(fbp_RAZ_sf, RAZ = var1.pred) 
+  
+  
+  fbp_ROS_idw <- gstat::gstat(
+    formula= ROS ~ 1, 
+    data = as(fbp_ROS, "Spatial"),
+    set=list(idp=2.0)
+  )
+  
+  fbp_ROS_interp <- interpolate(
+    grd_template_raster, fbp_ROS_idw)
+  fbp_ROS_stars = stars::st_as_stars(fbp_ROS_interp)
+  fbp_ROS_sf = sf::st_as_sf(fbp_ROS_stars, 
+    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
+    st_transform(fbp_ROS_sf, crs=st_crs(aoi)) 
+  fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred) 
+  
+  
+  master_sf_interp = st_join(master_sf_interp, fbp_FD_sf, largest=T)
+  master_sf_interp = st_join(master_sf_interp, fbp_CFC_sf, largest=T)
+  master_sf_interp = st_join(master_sf_interp, fbp_ROS_sf, largest=T)
+  master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
+  master_sf_interp = st_join(master_sf_interp, fbp_RAZ_sf, largest=T)
+  
+  master_sf_interp = master_sf_interp %>% dplyr::mutate(week_ending = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+  master_sf_interp = master_sf_interp %>% dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
+  master_sf_interp$week_ending <- as.Date(as.character(master_sf_interp$week_ending), format = "%Y%m%d")
+  master_sf_interp$date <- as.Date(as.character(master_sf_interp$date), format = "%Y%m%d")
+  master_sf_interp$week_ending
+  master_sf_interp$date
+  
+  saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
+  
+  
 
 
