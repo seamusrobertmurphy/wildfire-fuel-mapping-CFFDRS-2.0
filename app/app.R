@@ -4,6 +4,7 @@
 #load packages
 library(shiny)
 library(leaflet)
+library(sf)
 
 #library(dygraphs) 
 # Dygraphs fpr post-beta design to handle everything as xtc or zoo object 
