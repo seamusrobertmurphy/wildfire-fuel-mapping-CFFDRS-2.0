@@ -11,7 +11,7 @@ library(sf)
 # Seems the perfect solution for examining wildfire as a time-series framework
 
 # import master dataframe (preprocessed - pre-user that is)
-master_sf_interp = readRDS("./master_sf_interp.RDS")
+master_sf_interp = read_sf("/media/seamusrobertmurphy/128GB_WORKD/data/vector/wildfire/cffdrs_layers_bc4.shp")
 
 # Design User-Interface here
 ui <- fluidPage(
@@ -37,11 +37,7 @@ ui <- fluidPage(
         mainPanel(
           tabsetPanel(
             tabPanel("1.1. Fuel Type", leafletOutput("fueltype")),
-            tabPanel("1.2. Drought Code", leafletOutput("DC")),
-            tabPanel("2.1. Initial Spread Index", leafletOutput("ISI")),
-            tabPanel("2.2. Fire Weather Index", leafletOutput("FWI")),
-            tabPanel("3.1. Head Fire Intensity (kW/m)", leafletOutput("HFI")),
-            tabPanel("3.2. Spread Direction Azimuth", leafletOutput("RAZ")),
+            tabPanel("1.2. Danger Rating", leafletOutput("dngr_rt")),
           )
         )
     )
@@ -84,8 +80,8 @@ server <- function(input, output) {
   })
   
   
-  output$DC = renderLeaflet({
-    pal = colorBin(palette = "RdYlBu", 5, domain = master_sf_interp$DC)
+  output$dngr_rt = renderLeaflet({
+    pal = colorBin(palette = "RdYlBu", 5, domain = master_sf_interp$dngr_rt)
     
     date_filter() %>%
       st_transform(crs = "+init=epsg:4326") %>%
@@ -96,7 +92,7 @@ server <- function(input, output) {
                   smoothFactor = 0.5,
                   opacity = 1,
                   fillOpacity = 0.7,
-                  fillColor = ~ pal(date_filter()$DC),
+                  fillColor = ~ pal(date_filter()$dngr_rt),
                   highlightOptions = highlightOptions(
                     weight = 5,
                     fillOpacity = 1,
@@ -106,126 +102,11 @@ server <- function(input, output) {
       
       addLegend("bottomright",
                 pal = pal,
-                values = ~ DC,
+                values = ~ dngr_rt,
                 title = "Drought Code",
                 opacity=0.7)
     })
-    
-  
-  output$ISI = renderLeaflet({
-    pal = colorBin(palette = "R3", 5, domain = master_sf_interp$ISI)
-    
-    date_filter() %>%
-      st_transform(crs = "+init=epsg:4326") %>%
-      leaflet() %>%
-      addProviderTiles(provider = "NASAGIBS.ModisTerraTrueColorCR") %>%
-      setView(-119.25, 49.25, zoom=10) %>%
-      addPolygons(stroke = FALSE,
-                  smoothFactor = 0.5,
-                  opacity = 1,
-                  fillOpacity = 0.7,
-                  fillColor = ~ pal(date_filter()$ISI),
-                  highlightOptions = highlightOptions(
-                    weight = 5,
-                    fillOpacity = 1,
-                    color = "black", 
-                    opacity = 1, 
-                    bringToFront = TRUE)) %>%
-      
-      addLegend("bottomright",
-                pal = pal,
-                values = ~ ISI,
-                title = "Initial Spread Index",
-                opacity=0.7)
-    })
-  
-
-  output$FWI = renderLeaflet({
-    pal = colorBin(palette = "Okabe-Ito", 5, domain = master_sf_interp$FWI)
-    
-    date_filter() %>%
-      st_transform(crs = "+init=epsg:4326") %>%
-      leaflet() %>%
-      addProviderTiles(provider = "Esri.WorldImagery") %>%
-      setView(-119.25, 49.25, zoom=10) %>%
-      addPolygons(stroke = FALSE,
-                  smoothFactor = 0.5,
-                  opacity = 1,
-                  fillOpacity = 0.7,
-                  fillColor = ~ pal(date_filter()$FWI),
-                  highlightOptions = highlightOptions(
-                    weight = 5,
-                    fillOpacity = 1,
-                    color = "black", 
-                    opacity = 1, 
-                    bringToFront = TRUE)) %>%
-      
-      addLegend("bottomright",
-                pal = pal,
-                values = ~ FWI,
-                title = "Fire Weather Index",
-                opacity=0.7)
-    
-  })
-  
-  
-  output$HFI = renderLeaflet({
-    pal = colorBin(palette = "Okabe-Ito", 5, domain = master_sf_interp$HFI)
-    
-    date_filter() %>%
-      st_transform(crs = "+init=epsg:4326") %>%
-      leaflet() %>%
-      addProviderTiles(provider = "Esri.WorldImagery") %>%
-      setView(-119.25, 49.25, zoom=10) %>%
-      addPolygons(stroke = FALSE,
-                  smoothFactor = 0.5,
-                  opacity = 1,
-                  fillOpacity = 0.7,
-                  fillColor = ~ pal(date_filter()$HFI),
-                  highlightOptions = highlightOptions(
-                    weight = 5,
-                    fillOpacity = 1,
-                    color = "black", 
-                    opacity = 1, 
-                    bringToFront = TRUE)) %>%
-      
-      addLegend("bottomright",
-                pal = pal,
-                values = ~ HFI,
-                title = "Head Fire Intensity (kW/m)",
-                opacity=0.7)
-    
-  })
-  
-  
-  output$RAZ = renderLeaflet({
-    pal = colorBin(palette = "Tableau", 5, domain = master_sf_interp$RAZ)
-    
-    date_filter() %>%
-      st_transform(crs = "+init=epsg:4326") %>%
-      leaflet() %>%
-      addProviderTiles(provider = "Esri.WorldImagery") %>%
-      setView(-119.25, 49.25, zoom=10) %>%
-      addPolygons(stroke = FALSE,
-                  smoothFactor = 0.5,
-                  opacity = 1,
-                  fillOpacity = 0.7,
-                  fillColor = ~ pal(date_filter()$RAZ),
-                  highlightOptions = highlightOptions(
-                    weight = 5,
-                    fillOpacity = 1,
-                    color = "black", 
-                    opacity = 1, 
-                    bringToFront = TRUE)) %>%
-      
-      addLegend("bottomright",
-                pal = pal,
-                values = ~ RAZ,
-                title = "Spread Azimuth Direction",
-                opacity=0.7)
-    
-  })
-}
+  }
 
 # Run the application 
 shinyApp(ui = ui, server = server)
