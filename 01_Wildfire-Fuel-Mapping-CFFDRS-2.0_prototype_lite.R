@@ -1,24 +1,4 @@
 
-#Action: Build local server to host the Cabin Fuel + Fire Weather App wit GeoBC WMS/WFS
-#install.packages("devtools")
-#library(devtools)
-#devtools::install_github("rstudio/shiny")
-#devtools::install_github("r-spatial/sf")
-#devtools::install_github("r-spatial/stars")
-#devtools::install_github("ropensci/crul")
-#devtools::install_github("ropensci/nasapower")
-#.libPaths()
-#install.packages("terra")
-#install.packages("raster")
-#install.packages("rgdal")
-#install.packages("gstat")
-#install.packages("cffdrs")
-#install.packages("elevatr")
-#install.packages("dplyr")
-#install.packages("leaflet")
-#install.packages("forcats")
-#install.packages("units")
-
 library(curl)
 library(tibble)
 library(dplyr)
@@ -37,56 +17,63 @@ library(units)
 library(gstat)
 library(rgeos)
 
-#update.packages() 
-#library(usethis)
-#usethis::edit_r_environ()
+## Import AOI
+#aoi_bc = sf::read_sf("./Data/fire-centres/fire-centres-bc/DRPMFFRCNT_polygon.shp")
+#aoi = dplyr::rename(aoi, Okanagan_Watershed = WTRSHDGRPC)
+#aoi = aoi[1, "Okanagan_Watershed"]
 
-# Run static lint intermittently in local script environment
-# lintr::lint("./01_Wildfire-Fuel-Mapping-CFFDRS-2.0_prototype.R")
-#vri_ok_2020 = readRDS("./Data/vri_ok_2020.RDS")
+# Import VRI
+vri_ok_2020 = read_sf("/media/seamusrobertmurphy/128GB_WORKD/data/vector/vri/vri_bc_2020_cffdrs.shp")
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BCLCS_LV_1 = BCLCS_LEVE)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BCLCS_LV_2 = BCLCS_LE_1)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BCLCS_LV_3 = BCLCS_LE_2)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BCLCS_LV_4 = BCLCS_LE_3)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BCLCS_LV_5 = BCLCS_LE_4)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, SPEC_CD_1 = SPECIES__1)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, SPEC_CD_2 = SPECIES_CD)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, SPEC_PCT_1 = SPECIES_PC)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, SPEC_PCT_2 = SPECIES__2)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, PROJ_HT_1 = PROJ_HEI_1)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, PROJ_AGE_1 = PROJ_AGE_1)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, CR_CLOSURE = CROWN_CLOS)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BEC_ZONE = BEC_ZONE_C)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, BEC_SZONE = BEC_SUBZON)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, HRVSTDT = HARVEST_DA)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, DEAD_PCT = STAND_PERC)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, LIVE_STEMS = VRI_LIVE_S)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, DEAD_STEMS = VRI_DEAD_S)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, N_LOG_DIST = EARLIEST_N)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, N_LOG_DATE = EARLIEST_1)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, LAND_CD_1 = LAND_COVER)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, INV_STD_CD = INVENTORY_)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, NP_CODE = NON_PRODUC)
+vri_ok_2020 = dplyr::rename(vri_ok_2020, COMPARTMNT = COMPARTMEN)
 
-## Import AOI files
-aoi = sf::read_sf("./Data/hydrology/watersheds/watershed_okanagan.shp")
-aoi = dplyr::rename(aoi, Okanagan_Watershed = WTRSHDGRPC)
-aoi = aoi[1, "Okanagan_Watershed"]
-base::plot(aoi)
-st_crs(aoi)
+vri_ok_2020 = vri_ok_2020[c("FEATURE_ID", "BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", 
+                            "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", 
+                            "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", 
+                            "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE", "COMPARTMNT")]
 
-# Import VRI current and historical datasets
-vri_ok_2020 = sf::read_sf("./Data/vri/vri-ok-2020/VEG_R1_PLY_polygon.shp")
-vri_ok_2020 = vri_ok_2020[c("FEATURE_ID", "BCLCS_LV_1", "BCLCS_LV_2", "BCLCS_LV_3", "BCLCS_LV_4", "BCLCS_LV_5", "SPEC_CD_1", "SPEC_CD_2", "SPEC_PCT_1", "SPEC_PCT_2", "PROJ_HT_1", "PROJ_AGE_1", "CR_CLOSURE", "BEC_ZONE", "BEC_SZONE", "HRVSTDT", "DEAD_PCT", "LIVE_STEMS", "DEAD_STEMS", "N_LOG_DIST", "N_LOG_DATE", "LAND_CD_1", "INV_STD_CD", "NP_CODE", "COMPARTMNT")]
-vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
+#vri_ok_2020 = sf::st_intersection(sf::st_make_valid(vri_ok_2020), aoi)
 #plot(st_geometry(vri_ok_2020))
 #glimpse(vri_ok_2020)
 
-vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
-vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
-vri_ok_2020$BCLCS_LV_3 = as.factor(vri_ok_2020$BCLCS_LV_3)
-vri_ok_2020$BCLCS_LV_4 = as.factor(vri_ok_2020$BCLCS_LV_4)
-vri_ok_2020$BCLCS_LV_5 = as.factor(vri_ok_2020$BCLCS_LV_5)
-vri_ok_2020$SPEC_CD_1 = as.factor(vri_ok_2020$SPEC_CD_1)
-vri_ok_2020$SPEC_CD_2 = as.factor(vri_ok_2020$SPEC_CD_2)
-vri_ok_2020$BEC_ZONE = as.factor(vri_ok_2020$BEC_ZONE)
-vri_ok_2020$BEC_SZONE = as.factor(vri_ok_2020$BEC_SZONE)
-vri_ok_2020$N_LOG_DIST = as.factor(vri_ok_2020$N_LOG_DIST)
-vri_ok_2020$LAND_CD_1 = as.factor(vri_ok_2020$LAND_CD_1)
-vri_ok_2020$INV_STD_CD = as.factor(vri_ok_2020$INV_STD_CD)
-vri_ok_2020$NP_CODE = as.factor(vri_ok_2020$NP_CODE)
-vri_ok_2020$HRVSTDT = as.numeric(vri_ok_2020$HRVSTDT)
-vri_ok_2020$LIVE_STEMS = as.numeric(vri_ok_2020$LIVE_STEMS)
-vri_ok_2020$DEAD_STEMS = as.numeric(vri_ok_2020$DEAD_STEMS)
-
-summary.factor(vri_ok_2020$BEC_SZONE)
-summary.factor(vri_ok_2020$BEC_ZONE)
-summary.factor(vri_ok_2020$BCLCS_LV_1)
-summary.factor(vri_ok_2020$BCLCS_LV_2)
-summary.factor(vri_ok_2020$BCLCS_LV_3)
-summary.factor(vri_ok_2020$BCLCS_LV_4)
-summary.factor(vri_ok_2020$BCLCS_LV_5)
-summary.factor(vri_ok_2020$SPEC_CD_1)
-summary.factor(vri_ok_2020$N_LOG_DIST)
-
-
+#vri_ok_2020$BCLCS_LV_1 = as.factor(vri_ok_2020$BCLCS_LV_1)
+#vri_ok_2020$BCLCS_LV_2 = as.factor(vri_ok_2020$BCLCS_LV_2)
+#vri_ok_2020$BCLCS_LV_3 = as.factor(vri_ok_2020$BCLCS_LV_3)
+#vri_ok_2020$BCLCS_LV_4 = as.factor(vri_ok_2020$BCLCS_LV_4)
+#vri_ok_2020$BCLCS_LV_5 = as.factor(vri_ok_2020$BCLCS_LV_5)
+#vri_ok_2020$SPEC_CD_1 = as.factor(vri_ok_2020$SPEC_CD_1)
+#vri_ok_2020$SPEC_CD_2 = as.factor(vri_ok_2020$SPEC_CD_2)
+#vri_ok_2020$BEC_ZONE = as.factor(vri_ok_2020$BEC_ZONE)
+#vri_ok_2020$BEC_SZONE = as.factor(vri_ok_2020$BEC_SZONE)
+#vri_ok_2020$N_LOG_DIST = as.factor(vri_ok_2020$N_LOG_DIST)
+#vri_ok_2020$LAND_CD_1 = as.factor(vri_ok_2020$LAND_CD_1)
+#vri_ok_2020$INV_STD_CD = as.factor(vri_ok_2020$INV_STD_CD)
+#vri_ok_2020$NP_CODE = as.factor(vri_ok_2020$NP_CODE)
+#vri_ok_2020$HRVSTDT = as.Date(vri_ok_2020$HRVSTDT)
+#vri_ok_2020$LIVE_STEMS = as.numeric(vri_ok_2020$LIVE_STEMS)
+#vri_ok_2020$DEAD_STEMS = as.numeric(vri_ok_2020$DEAD_STEMS)
 
 ## Generate Panel 1 indicator: Fuel Type using MFLNRO algo (Perrakis et al 2015)
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_N = case_when(
@@ -103,8 +90,16 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_N = case_when(
     is.na(HRVSTDT) & is.na(SPEC_CD_1) & (INV_STD_CD=="V" | INV_STD_CD=="I") & (LAND_CD_1=="SL" | LAND_CD_1=="ST" | LAND_CD_1=="HE" | LAND_CD_1=="HF" | is.na(LAND_CD_1)) & (BEC_ZONE=="CMA" | BEC_ZONE=="IMA") |
     is.na(HRVSTDT) & is.na(SPEC_CD_1) & (INV_STD_CD=="V" | INV_STD_CD=="I") & (LAND_CD_1=="SI" | LAND_CD_1=="GL" | LAND_CD_1=="PN" | LAND_CD_1=="RO" | LAND_CD_1=="BR" | LAND_CD_1=="TA" | LAND_CD_1=="BI" | LAND_CD_1=="MZ" | LAND_CD_1=="LB" | LAND_CD_1=="EL" | LAND_CD_1=="GL" | LAND_CD_1=="RS" | LAND_CD_1=="ES" | LAND_CD_1=="LS" | LAND_CD_1=="RM" | LAND_CD_1=="BE" | LAND_CD_1=="BU" | LAND_CD_1=="RZ" | LAND_CD_1=="MU" | LAND_CD_1=="CU" | LAND_CD_1=="MN" | LAND_CD_1=="GP" | LAND_CD_1=="TZ" | LAND_CD_1=="RN" | LAND_CD_1=="MI" | LAND_CD_1=="OT" | LAND_CD_1=="LA" | LAND_CD_1=="RE" | LAND_CD_1=="RI") |
     BCLCS_LV_1 == "U" ~ "1" ) 
-  )
+)
 
+summary.factor(vri_ok_2020$BCLCS_LV_1)
+summary.factor(vri_ok_2020$BCLCS_LV_2)
+summary.factor(vri_ok_2020$BCLCS_LV_5)
+summary.factor(vri_ok_2020$BEC_ZONE)
+summary.factor(vri_ok_2020$SPEC_PCT_1)
+summary.factor(vri_ok_2020$SPEC_CD_1)
+summary.factor(vri_ok_2020$HRVSTDT)
+summary.factor(vri_ok_2020$fuel_N)
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C1 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BEC_ZONE=="SWB" & SPEC_PCT_1 >= 80 & SPEC_CD_1=="SB" & HRVSTDT>=20100000  & BCLCS_LV_5=="SP" |
@@ -119,7 +114,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C1 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BEC_ZONE=="BWBS" & SPEC_PCT_1 >= 20 & SPEC_CD_1=="SX" & HRVSTDT>=20130000  & BCLCS_LV_5=="SP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BEC_ZONE=="BWBS" & SPEC_PCT_1 >= 20 & SPEC_CD_1=="SW" & HRVSTDT>=20130000  & BCLCS_LV_5=="SP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & BEC_ZONE=="BWBS" & SPEC_PCT_1 >= 20 & SPEC_CD_1=="S" & HRVSTDT>=20130000  & BCLCS_LV_5=="SP" ~"1")
-  )
+)
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C2 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & BEC_ZONE=="BWBS" &  !is.na(SPEC_CD_1) & HRVSTDT<=19950000 |
@@ -242,7 +237,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C2 = case_when(
     SPEC_PCT_1 >=80 & SPEC_CD_1=="PA" & HRVSTDT<=20130000 & BCLCS_LV_5=="DE" & PROJ_HT_1 >=12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & DEAD_PCT<50 & DEAD_PCT>25 |
     SPEC_PCT_1 >=80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1 >=12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & DEAD_PCT<50 & DEAD_PCT>25 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT<=1995000 & BEC_ZONE=="BWBS" ~ "1" ) 
-  )
+)
 
 
 
@@ -256,7 +251,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "dcw" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "dk" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "dm" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "xc" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "xcp" |
     BCLCS_LV_1=="V" & BCLCS_LV_5=="N" & !is.na(SPEC_CD_1) & HRVSTDT<=1995000 & BEC_ZONE=="ICH" & BEC_SZONE == "xh" |
@@ -365,7 +360,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & is.na(HRVSTDT) & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xh" & SPEC_CD_2!="PY" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & HRVSTDT<=20140000 & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xk" & SPEC_CD_2!="PY" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & is.na(HRVSTDT) & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xk" & SPEC_CD_2!="PY" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & HRVSTDT<=20140000 & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xc" & BEC_ZONE=="ICH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & is.na(HRVSTDT) & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xc" & SPEC_CD_2!="ICH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>=20 & HRVSTDT<=20140000 & CR_CLOSURE >55 & PROJ_HT_1 >=4 & PROJ_HT_1 <=12 & BEC_SZONE=="xcp" & BEC_ZONE=="ICH" |
@@ -587,7 +582,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT <=20140000 & DEAD_PCT<34 & PROJ_HT_1>4 & PROJ_HT_1<12 & CR_CLOSURE > 55 & BEC_ZONE=="ICH" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT <=20140000 & DEAD_PCT<34 & PROJ_HT_1>4 & PROJ_HT_1<12 & CR_CLOSURE > 55 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT <=20140000 & DEAD_PCT<34 & PROJ_HT_1>4 & PROJ_HT_1<12 & CR_CLOSURE > 55 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT <=20140000 & DEAD_PCT<34 & PROJ_HT_1>4 & PROJ_HT_1<12 & CR_CLOSURE > 55 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT <=20140000 & DEAD_PCT<34 & PROJ_HT_1>4 & PROJ_HT_1<12 & CR_CLOSURE > 55 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
     
@@ -695,12 +690,12 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="dcw"|
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="dk"|
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="dm"|
-
+    
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="xc"|
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="xcp"|
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="xh"|
     BCLCS_LV_1=="N" & HRVSTDT <= 19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="xk"|
-
+    
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="mh"|
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="mk"|
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="mw"|
@@ -708,7 +703,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C3 = case_when(
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="w"|
     BCLCS_LV_1=='N' & HRVSTDT <= 19950000 & BEC_ZONE =="IDF" & BEC_SZONE=="v"|
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="SBS" ~ "1" )
-  )
+)
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C4 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>20 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & CR_CLOSURE>=55 & BEC_SZONE=="dc" & DEAD_PCT>34 |
@@ -748,7 +743,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C4 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="OP" & SPEC_CD_2=="SW" & LIVE_STEMS + DEAD_STEMS > 6000 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & HRVSTDT<20130000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="OP" & SPEC_CD_2=="SX" & LIVE_STEMS + DEAD_STEMS > 6000 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="OP" & SPEC_CD_2=="Sx" & LIVE_STEMS + DEAD_STEMS > 6000 |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & HRVSTDT<20130000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="DE" & SPEC_CD_2=="B" & LIVE_STEMS + DEAD_STEMS > 6000 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="DE" & SPEC_CD_2=="B" & LIVE_STEMS + DEAD_STEMS > 6000 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") & HRVSTDT<20130000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & BCLCS_LV_5=="DE" & SPEC_CD_2=="BA" & LIVE_STEMS + DEAD_STEMS > 6000 |
@@ -787,12 +782,12 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C4 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PY" & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PY" & HRVSTDT<20100000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PY" & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="OP" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1!="PY" & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI") & HRVSTDT<20130000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1!="PY" & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1!="PY" & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI") & HRVSTDT<20130000 & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1!="PY" & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & PROJ_HT_1<=12 & LIVE_STEMS + DEAD_STEMS > 8000 & BCLCS_LV_5=="OP" ~ "1" )
-  )
+)
 
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
@@ -801,13 +796,13 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mh" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & !is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mk" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mw" |
@@ -828,10 +823,10 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H" & HRVSTDT<20140000 & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="H" & is.na(HRVSTDT) & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="CW" & HRVSTDT<20140000 & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="CW" & is.na(HRVSTDT) & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y" & HRVSTDT<20140000 & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="Y" & is.na(HRVSTDT) & PROJ_HT_1>15 & PROJ_AGE_1>60 & BCLCS_LV_5=="DE" |
     
@@ -889,7 +884,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & CR_CLOSURE>55 & PROJ_HT_1>=12 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
@@ -997,7 +992,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & is.na(HRVSTDT) & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>65 & SPEC_PCT_1<80 & HRVSTDT<20140000 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
@@ -1048,7 +1043,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="SS" & HRVSTDT<20140000 & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="OP" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="SS" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" |
     
@@ -1073,7 +1068,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>=26 & CR_CLOSURE<=55 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
@@ -1085,7 +1080,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
@@ -1181,31 +1176,31 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C5 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
     
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="v*" |
     
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mh" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mk" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="mw" |
-
+    
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="v*" ~ "1" )
-  )
-    
+)
+
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C6 = case_when(
   BCLCS_LV_1=="U" & BCLCS_LV_4=="TC" |
     is.na(BCLCS_LV_1) & BCLCS_LV_4=="TC" ~ "1" )
-  )
-   
+)
+
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
   BCLCS_LV_1=="U" & BCLCS_LV_4=="TC" |
     is.na(BCLCS_LV_1) & BCLCS_LV_4=="TC" |
@@ -1219,7 +1214,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="xcp" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="xh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="CDF" & BEC_SZONE=="xk" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="ESSF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="IDF" & BEC_SZONE=="dc" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(SPEC_CD_1) & HRVSTDT<19950000 & BEC_ZONE=="IDF" & BEC_SZONE=="dcp" |
@@ -1343,7 +1338,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & SPEC_CD_1=="PY" & PROJ_HT_1>=4  & BCLCS_LV_5=="OP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20130000 & SPEC_CD_1=="PY" & PROJ_HT_1>=4 & BCLCS_LV_5=="SP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & SPEC_CD_1=="PY" & PROJ_HT_1>=4  & BCLCS_LV_5=="SP" |
-  
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20130000 & SPEC_CD_1=="PL" & CR_CLOSURE<40 & SPEC_CD_2!="S" & SPEC_CD_2!="SE" & SPEC_CD_2!="SW" & SPEC_CD_2!="SX" & SPEC_CD_2!="B" & SPEC_CD_2!="BA" & SPEC_CD_2!="BL" & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & is.na(HRVSTDT) & SPEC_CD_1=="PL" & CR_CLOSURE<40 & SPEC_CD_2!="S" & SPEC_CD_2!="SE" & SPEC_CD_2!="SW" & SPEC_CD_2!="SX" & SPEC_CD_2!="B" & SPEC_CD_2!="BA" & SPEC_CD_2!="BL" & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & HRVSTDT<20130000 & SPEC_CD_1=="PL" & CR_CLOSURE<40 & SPEC_CD_2!="S" & SPEC_CD_2!="SE" & SPEC_CD_2!="SW" & SPEC_CD_2!="SX" & SPEC_CD_2!="B" & SPEC_CD_2!="BA" & SPEC_CD_2!="BL" & BEC_ZONE=="PP" |
@@ -1488,7 +1483,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & is.na(HRVSTDT) & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & BEC_ZONE!="CWH" & BEC_ZONE!="CDF" & BEC_ZONE!="MH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & HRVSTDT<20130000 & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & (BEC_ZONE!="ICH" & BEC_SZONE!="mh") & (BEC_ZONE!="ICH" & BEC_SZONE!="mk") & (BEC_ZONE!="ICH" & BEC_SZONE!="mw") |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & is.na(HRVSTDT) & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & (BEC_ZONE!="ICH" & BEC_SZONE!="mh") & (BEC_ZONE!="ICH" & BEC_SZONE!="mk") & (BEC_ZONE!="ICH" & BEC_SZONE!="mw") |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & HRVSTDT<20130000 & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & is.na(HRVSTDT) & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & HRVSTDT<20130000 & SPEC_CD_1=="PL" & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="v*" |
@@ -1561,17 +1556,17 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="PP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="PP" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="PP" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="MS" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="MS" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="MS" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="MS" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="IDF" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="BG" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>=4 & CR_CLOSURE>26 & CR_CLOSURE<55 & BEC_ZONE=="BG" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>=4 & is.na(CR_CLOSURE) & BEC_ZONE=="BG" |
@@ -1596,7 +1591,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="dk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="dm" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="dm" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="xc" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="xc" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1>12 & BEC_ZONE=="ICH" & BEC_SZONE=="xcp" |
@@ -1664,7 +1659,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="IDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & HRVSTDT<20130000 & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="BG" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & PROJ_HT_1>12 & CR_CLOSURE<40 & BEC_ZONE=="BG" |
-  
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE!="CWH" & BEC_ZONE!="CDF" & BEC_ZONE!="MH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE!="CWH" & BEC_ZONE!="CDF" & BEC_ZONE!="MH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & (BEC_ZONE!="ICH" & BEC_SZONE!="mh") & (BEC_ZONE!="ICH" & BEC_SZONE!="mk") & (BEC_ZONE!="ICH" & BEC_SZONE!="mw") |
@@ -1709,7 +1704,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_C7 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="w*" | 
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="v*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>=80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE!="ICH" & BEC_SZONE!="v*" ~ "1" )
-  )
+)
 
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_D1D2 = case_when(
@@ -1808,7 +1803,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_D1D2 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT<20140000 & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & is.na(HRVSTDT) & PROJ_HT_1<4 & BEC_ZONE=="CDF" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & BCLCS_LV_5=="SP" & BEC_ZONE=="CDF" |
@@ -1840,7 +1835,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_D1D2 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="CW" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y" & HRVSTDT<20140000 & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="Y" & is.na(HRVSTDT) & BCLCS_LV_5=="DE" & PROJ_HT_1<4 & SPEC_PCT_1>80 |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SS" & HRVSTDT<20140000 & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_CD_1=="SS" & is.na(HRVSTDT) & BCLCS_LV_5=="SP" & SPEC_PCT_1>80 |
     
@@ -1899,9 +1894,9 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_D1D2 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="MH" |
     BCLCS_LV_1=="N" & HRVSTDT>19960000 & HRVSTDT<20130000 & BEC_ZONE=="ICH" ~ "1" ) 
-  )
-    
-    
+)
+
+
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M1M2 = case_when(
   BCLCS_LV_1=="U" & BCLCS_LV_4=="TM" |
     is.na(BCLCS_LV_1) & BCLCS_LV_4=="TM" |
@@ -2031,7 +2026,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M1M2 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="xcp" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="xh" |
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & BEC_ZONE=="CWH" & BEC_SZONE=="xk" ~ "1" ) 
-  )
+)
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M3M4 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PL" & HRVSTDT<20130000 & (SPEC_CD_2=="S" | SPEC_CD_2=="SE" | SPEC_CD_2=="SW" | SPEC_CD_2=="SX") & PROJ_HT_1>12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & BCLCS_LV_5=="OP" & DEAD_PCT>50 |
@@ -2084,9 +2079,9 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_M3M4 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & PROJ_HT_1>12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & CR_CLOSURE>40 & DEAD_PCT>50 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PA" & HRVSTDT<20130000 & PROJ_HT_1>12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & is.na(CR_CLOSURE) & DEAD_PCT>50 |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PA" & is.na(HRVSTDT) & PROJ_HT_1>12 & N_LOG_DIST=="IBM" & N_LOG_DATE>=20150000 & is.na(CR_CLOSURE) & DEAD_PCT>50 ~ "1" ) 
-  )
-  
-    
+)
+
+
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S1 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT>=20130000 & SPEC_CD_1!="PA" & SPEC_CD_1!="PL" & SPEC_CD_1!="PLC" & SPEC_CD_1!="PLI" & SPEC_CD_1!="PY" & SPEC_CD_1!="S" & SPEC_CD_1!="SE" & SPEC_CD_1!="SW" & SPEC_CD_1!="SX" & SPEC_CD_1!="B" & SPEC_CD_1!="BA" & SPEC_CD_1!="BL" & SPEC_CD_1!="CW" & SPEC_CD_1!="YC" & SPEC_CD_1!="H" & SPEC_CD_1!="FD" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT>=20130000 & (SPEC_CD_1=="PA" | SPEC_CD_1=="PL" | SPEC_CD_1=="PLC" | SPEC_CD_1=="PLI" | SPEC_CD_1=="PY") |
@@ -2100,7 +2095,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S1 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="dcw" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="dk" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="dm" |
-
+    
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="xcp" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="xh" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & SPEC_PCT_1>80 & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="xk" |
@@ -2141,7 +2136,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S1 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & SPEC_CD_1=="PA" & HRVSTDT<=20130000 |
     
     BCLCS_LV_1=="N" & HRVSTDT<=20140000 ~ "1" ) 
-  )
+)
 
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S2 = case_when(
@@ -2157,9 +2152,9 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S2 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & HRVSTDT>=20100000 & SPEC_CD_1=="SW" |
     
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & HRVSTDT>=20100000 & SPEC_CD_1=="SE" ~ "1" ) 
-  )
-    
-  
+)
+
+
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S3 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT>=20130000 & SPEC_CD_1=="FD" & BEC_ZONE=="CWH" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & HRVSTDT>=20130000 & SPEC_CD_1=="FD" & BEC_ZONE=="ICH" |
@@ -2191,7 +2186,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_S3 = case_when(
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="w*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT>=20140000 & BEC_ZONE=="ICH" & BEC_SZONE=="v*" |
     BCLCS_LV_1=="V" & BCLCS_LV_2=="T" & SPEC_PCT_1>80 & (SPEC_CD_1=="FD" | SPEC_CD_1=="FDC" | SPEC_CD_1=="FDI") & HRVSTDT>=20140000 & BEC_ZONE=="CDF" ~ "1" ) 
-  )
+)
 
 vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_O1 = case_when(
   BCLCS_LV_1=="V" & BCLCS_LV_2=="N" & is.na(HRVSTDT) & is.na(SPEC_CD_1) & INV_STD_CD!="F" & LAND_CD_1=="SL" & BEC_ZONE=="PP" |
@@ -2317,7 +2312,7 @@ vri_ok_2020 = vri_ok_2020 %>% dplyr::mutate(fuel_O1 = case_when(
     BCLCS_LV_1=="N" & HRVSTDT<19950000 & (BEC_ZONE=="PP" | BEC_ZONE=="BG") |
     
     BCLCS_LV_1=="N" & HRVSTDT<20130000 & HRVSTDT>19960000 & (BEC_ZONE=="PP" | BEC_ZONE=="MS" | BEC_ZONE=="BG" | BEC_ZONE=="IDF") ~ "1" ) 
-  )
+)
 
 vri_ok_2020 = vri_ok_2020 %>% 
   dplyr::mutate(fueltype = case_when(
@@ -2336,342 +2331,38 @@ vri_ok_2020 = vri_ok_2020 %>%
     fuel_S2=="1" ~ "S2",
     fuel_S3=="1" ~ "S3",
     fuel_O1=="1" ~ "O1a/b" )
-    )
+  )
 
 
 #vri_ok_2020$fuel_N = forcats::fct_explicit_na(vri_ok_2020$fuel_N, na_level = "1")
 vri_ok_2020$fueltype = forcats::fct_explicit_na(vri_ok_2020$fueltype, na_level = "N")
 summary.factor(vri_ok_2020$fueltype)
+st_write(vri_ok_2020, "./app/cabin_fueltype_internal.shp")
+
+
+
+#cabin_cffdrs_ext = full_join(as_tibble(vri_ok_2020), as_tibble(fire_danger_rating_20220508), by = "geometry")
+#cabin_cffdrs_ext = st_as_sf(cabin_cffdrs_ext)
+#summary(fire_danger_rating_20220508$DNGR_RT)
+#summary(cabin_cffdrs_ext$DNGR_RT)
+
+#cabin_cffdrs_ext = st_join(vri_ok_2020, fire_danger_rating_20220508, largest = T)
+#summary(fire_danger_rating_20220508$DNGR_RT)
+#summary(cabin_cffdrs_ext$DNGR_RT)
+
+#cabin_cffdrs_ext = st_join(fire_danger_rating_20220508, vri_ok_2020, largest = T)
+#summary(fire_danger_rating_20220508$DNGR_RT)
+#summary(cabin_cffdrs_ext$DNGR_RT)
+
+master_sf_interp = read_sf("/media/seamusrobertmurphy/128GB_WORKD/data/vector/wildfire/cffdrs_layers_bc4.shp")
+master_sf_interp = master_sf_interp[c("fueltype", "dngr_rt", "mffrznnm", "mffrcntrnm")]
 summary.factor(master_sf_interp$fueltype)
+summary.factor(master_sf_interp$dngr_rt)
+summary.factor(master_sf_interp$mffrcntrnm)
+summary.factor(master_sf_interp$mffrznd)
+summary.factor(master_sf_interp$hdqrtrsctn)
+str(master_sf_interp)
+master_sf_interp = read_sf("/media/seamusrobertmurphy/128GB_WORKD/data/vector/wildfire/cffdrs_layers_bc5.shp")
 
-
-vri_ok_2020 = vri_ok_2020 %>% 
-  dplyr::mutate(fire_centre = case_when(
-    Okanagan_Watershed!="NA" ~ "Kamloops" ) 
-  )
-
-vri_ok_2020 = vri_ok_2020 %>% 
-  dplyr::mutate(watershed = case_when(
-    Okanagan_Watershed!="NA" ~ "Okanagan" ) 
-  )
-
-vri_ok_2020 = vri_ok_2020 %>% 
-  dplyr::mutate(week_ending = case_when(
-    Okanagan_Watershed!="NA" ~ "20210731" ) 
-  )
-
-
-cutblocks = sf::read_sf("./Data/cutblocks/cutblocks_kamloops_fire_centre/CNS_CUT_BL_polygon.shp")
-cutblocks_kamloopsFC = sf::st_intersection(sf::st_make_valid(cutblocks), aoi)
-cutblocks_kamloopsFC = cutblocks_kamloopsFC[c("CUTBLOCKID", "HARVESTYR", "AREAHA", "DSTRBEDDT")] 
-
-burns_BC = sf::read_sf("./Data/burns/burns-historical/H_FIRE_PLY_polygon.shp")
-burns_kamloopsFC = sf::st_intersection(sf::st_make_valid(burns_BC), aoi)
-burns_kamloopsFC = burns_kamloopsFC[c("FIRE_YEAR", "FIRE_DATE", "FIRELABEL")]
-
-mpb = sf::read_sf("./Data/pests/beetle-mpb/FADM_MPBSA_polygon.shp")
-mpb_kamloopsFC = sf::st_intersection(sf::st_make_valid(mpb), aoi)
-mpb_kamloopsFC = mpb_kamloopsFC[c("FFCTVDT", "LGSLTNFLNM", "FTRCD")]
-
-master_sf = st_join(vri_ok_2020, cutblocks_kamloopsFC, largest = TRUE)
-master_sf = st_join(master_sf, burns_kamloopsFC, largest = TRUE)
-master_sf = st_join(master_sf, mpb_kamloopsFC, largest = TRUE)
-
-
-# Fire Weather Metrics: nasapower-API
-climate_vars_daily = get_power(community = "ag",
-                          lonlat = c(-122.25, 48.5, -116.25, 52.5),
-                          pars = c("RH2M", "T2M", "PRECTOTCORR", "WS10M"),
-                          dates = c("2021-07-31", "2021-07-31"),
-                          temporal_api = "daily") 
-
-# rename to match cffdrs.pkg requirements
-climate_vars_daily = rename(climate_vars_daily, LONG = LON) 
-climate_vars_daily = rename(climate_vars_daily, LAT = LAT) 
-climate_vars_daily = rename(climate_vars_daily, YR = YEAR) 
-climate_vars_daily = rename(climate_vars_daily, MON = MM) 
-climate_vars_daily = rename(climate_vars_daily, DAY = DD) 
-climate_vars_daily = rename(climate_vars_daily, Dj = DOY) 
-climate_vars_daily = rename(climate_vars_daily, TEMP = T2M) 
-climate_vars_daily = rename(climate_vars_daily, RH = RH2M) 
-climate_vars_daily = rename(climate_vars_daily, WS = WS10M) 
-climate_vars_daily = rename(climate_vars_daily, PREC = PRECTOTCORR) 
-fwi_input = climate_vars_daily[c("LONG", "LAT", "YR", "MON", "DAY", "Dj", "TEMP", "RH", "WS", "PREC")] 
-
-fwi_out1<-fwi(fwi_input)
-fwi_out3<-fwi(fwi_input,init=fwi_out1,batch=FALSE) # for computing multiple weather stations 'batch=TRUE' 
-fwi_out3 = st_as_sf(fwi_out3, coords = c("LONG", "LAT"), crs = "+proj=longlat") #%>%st_transform(fwi_out3, crs=st_crs(master_sf)) 
-
-fwi_ISI = fwi_out3["ISI"]
-fwi_BUI = fwi_out3["BUI"]
-fwi_FWI = fwi_out3["FWI"]
-fwi_DSR = fwi_out3["DSR"]
-fwi_FFMC = fwi_out3["FFMC"]
-fwi_DMC = fwi_out3["DMC"]
-fwi_DC = fwi_out3["DC"]
-
-st_crs(fwi_ISI)
-st_crs(aoi)
-master_sf_interp = st_transform(master_sf, 4326)
-aoi_4326 = st_transform(aoi, 4326)
-
-# Interpolate FWI values
-bbox = st_bbox(aoi)
-grd_template <- expand.grid(
-  X = seq(from = bbox["xmin"], to = bbox["xmax"], by = 250),
-  Y = seq(from = bbox["ymin"], to = bbox["ymax"], by = 250)
-  )
-bbox_4326 = st_bbox(aoi_4326)
-grd_template_4326 <- expand.grid(
-  X = seq(from = bbox["xmin"], to = bbox["xmax"], by = 250),
-  Y = seq(from = bbox["ymin"], to = bbox["ymax"], by = 250)
-  )
-
-grd_template_3005 = st_make_grid(aoi, n=c(5,10))
-plot(st_geometry(grd_template_3005))
-
-grd_template_4326 = st_make_grid(aoi_4326, n=c(2,4))
-plot(st_geometry(grd_template_4326))
-fwi_ISI_4326 = st_interpolate_aw(fwi_ISI[ISI], grd_template_4326, extensive = TRUE, keep_NA = TRUE)
-plot(fwi_ISI)
-plot(fwi_ISI_4326)
-fwi_ISI_4326
-
-fwi_ISI_idw <- gstat::gstat(
-  formula= ISI ~ 1, 
-  data = as(fwi_ISI, "Spatial"),
-  set=list(idp=2.0)
-  )
-
-fwi_ISI_interp <- interpolate(
-  grd_template_raster, fwi_ISI_idw)
-
-fwi_ISI_stars = stars::st_as_stars(fwi_ISI_interp)
-fwi_ISI_sf = sf::st_as_sf(fwi_ISI_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_ISI_sf, crs=st_crs(aoi)) 
-fwi_ISI_sf = rename(fwi_ISI_sf, ISI = var1.pred) 
-
-
-fwi_BUI_idw <- gstat::gstat(
-  formula= BUI ~ 1, 
-  data = as(fwi_BUI, "Spatial"),
-  set=list(idp=2.0)
-  )
-
-fwi_BUI_interp <- interpolate(
-  grd_template_raster, fwi_BUI_idw)
-fwi_BUI_stars = stars::st_as_stars(fwi_BUI_interp)
-fwi_BUI_sf = sf::st_as_sf(fwi_BUI_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_BUI_sf, crs=st_crs(aoi)) 
-fwi_BUI_sf = rename(fwi_BUI_sf, BUI = var1.pred) 
-
-
-fwi_FWI_idw <- gstat::gstat(
-  formula= FWI ~ 1, 
-  data = as(fwi_FWI, "Spatial"),
-  set=list(idp=2.0)
-  )
-
-fwi_FWI_interp <- interpolate(
-  grd_template_raster, fwi_FWI_idw)
-fwi_FWI_stars = stars::st_as_stars(fwi_FWI_interp)
-fwi_FWI_sf = sf::st_as_sf(fwi_FWI_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_FWI_sf, crs=st_crs(aoi)) 
-fwi_FWI_sf = rename(fwi_FWI_sf, FWI = var1.pred) 
-
-
-fwi_FFMC_idw <- gstat::gstat(
-  formula= FFMC ~ 1, 
-  data = as(fwi_FFMC, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fwi_FFMC_interp <- interpolate(
-  grd_template_raster, fwi_FFMC_idw)
-fwi_FFMC_stars = stars::st_as_stars(fwi_FFMC_interp)
-fwi_FFMC_sf = sf::st_as_sf(fwi_FFMC_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_FFMC_sf, crs=st_crs(aoi)) 
-fwi_FFMC_sf = rename(fwi_FFMC_sf, FFMC = var1.pred) 
-
-
-fwi_DMC_idw <- gstat::gstat(
-  formula= DMC ~ 1, 
-  data = as(fwi_DMC, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fwi_DMC_interp <- interpolate(
-  grd_template_raster, fwi_DMC_idw)
-fwi_DMC_stars = stars::st_as_stars(fwi_DMC_interp)
-fwi_DMC_sf = sf::st_as_sf(fwi_DMC_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_DMC_sf, crs=st_crs(aoi)) 
-fwi_DMC_sf = rename(fwi_DMC_sf, DMC = var1.pred) 
-
-
-fwi_DC_idw <- gstat::gstat(
-  formula= DC ~ 1, 
-  data = as(fwi_DC, "Spatial"),
-  set=list(idp=2.0)
-)
-
-fwi_DC_interp <- interpolate(
-  grd_template_raster, fwi_DC_idw)
-fwi_DC_stars = stars::st_as_stars(fwi_DC_interp)
-fwi_DC_sf = sf::st_as_sf(fwi_DC_stars, 
-  as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-  st_transform(fwi_DC_sf, crs=st_crs(aoi)) 
-fwi_DC_sf = rename(fwi_DC_sf, DC = var1.pred) 
-
-# need to back-edit these with future coding to replace with current master file 
-# master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
-master_sf_interp = st_join(master_sf, fwi_DC_sf, largest=T) 
-master_sf_interp = st_join(master_sf_interp, fwi_ISI_sf, largest=T)
-master_sf_interp = st_join(master_sf_interp, fwi_BUI_sf, largest=T)
-master_sf_interp = st_join(master_sf_interp, fwi_FWI_sf, largest=T)
-master_sf_interp = st_join(master_sf_interp, fwi_FFMC_sf, largest=T)
-master_sf_interp = st_join(master_sf_interp, fwi_DMC_sf, largest=T)
-
-
-  # Fire Behaviour Prediction Mapping`
-
-ELV = get_elev_raster(aoi, z=8)
-terra::writeRaster(ELV, filename = "./Data/ELV.tif", overwrite=TRUE)
-
-GS = slopeAspect(ELV, filename = "./Data/GS.tif", out='slope', unit='radians', neighbors=8, overwrite=TRUE)
-GS = terra::rast(GS) 
-GS = terra::mask(GS, vect(aoi))
-GS = terra::as.polygons(GS) %>% 
-  st_as_sf()
-
-Aspect = slopeAspect(ELV, filename = "./Data/Aspect.tif", out='aspect', unit='radians', neighbors=8, overwrite=TRUE)
-Aspect = terra::rast(Aspect)
-Aspect = terra::mask(Aspect, vect(aoi))
-Aspect = terra::as.polygons(Aspect) %>% 
-  st_as_sf()
-
-ELV = terra::rast(ELV) 
-ELV = terra::mask(ELV, vect(aoi))
-ELV = terra::as.polygons(ELV) %>% 
-  st_as_sf()
-
-master_sf_interp_df = dplyr::full_join(as_tibble(master_sf_interp), as_tibble(GS), as_tibble(Aspect), by = "geometry")
-master_sf_interp = sf::st_as_sf(master_sf_interp_df)
-
-fwi_input = climate_vars_daily[c("LONG", "LAT", "YR", "MON", "DAY", "Dj", "TEMP", "RH", "WS", "PREC")] 
-
-fbp_input = [c()]
-fbp_input = rename(fbp_input, id = FEATURE_ID) 
-  fbp_input = fbp_input %>% 
-    mutate(lat = unlist(map(fbp_input$geometry,1)),
-           long = unlist(map(fbp_input$geometry,2)))
-  
-  fbp_out1 = cffdrs::fbp(fbp_input, output = "Primary")
-  fbp_out2 = cffdrs::fbp(fbp_input, output = "Secondary")
-  fbp_outAll = cffdrs::fbp(fbp_input, output = "All")
-  
-  #FD: S=Surface, I=Intermittent, C=Crown
-  fbp_FD = fbp_out1["FD"] 
-  fbp_CFC = fbp_out1["CFC"]
-  fbp_HFI = fbp_out1["HFI"]
-  fbp_RAZ = fbp_out1["RAZ"]
-  fbp_ROS = fbp_out1["ROS"]
-  fbp_SFC = fbp_out1["SFC"]
-  fbp_TFC = fbp_out1["TFC"]
-  
-  fbp_FD_idw <- gstat::gstat(
-    formula= FD ~ 1, 
-    data = as(fbp_FD, "Spatial"),
-    set=list(idp=2.0)
-  )
-  
-  fbp_FD_interp <- interpolate(
-    grd_template_raster, fbp_FD_idw)
-  fbp_FD_stars = stars::st_as_stars(fbp_FD_interp)
-  fbp_FD_sf = sf::st_as_sf(fbp_FD_stars, 
-    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-    st_transform(fbp_FD_sf, crs=st_crs(aoi)) 
-  fbp_FD_sf = rename(fbp_FD_sf, FD = var1.pred) 
-  
-  fbp_CFC_idw <- gstat::gstat(
-    formula= CFC ~ 1, 
-    data = as(fbp_CFC, "Spatial"),
-    set=list(idp=2.0)
-  )
-  
-  fbp_CFC_interp <- interpolate(
-    grd_template_raster, fbp_CFC_idw)
-  fbp_CFC_stars = stars::st_as_stars(fbp_CFC_interp)
-  fbp_CFC_sf = sf::st_as_sf(fbp_CFC_stars, 
-    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-    st_transform(fbp_CFC_sf, crs=st_crs(aoi)) 
-  fbp_CFC_sf = rename(fbp_CFC_sf, FD = var1.pred) 
-  
-  
-  fbp_HFI_idw <- gstat::gstat(
-    formula= HFI ~ 1, 
-    data = as(fbp_HFI, "Spatial"),
-    set=list(idp=2.0)
-  )
-  
-  fbp_HFI_interp <- interpolate(
-    grd_template_raster, fbp_HFI_idw)
-  fbp_HFI_stars = stars::st_as_stars(fbp_HFI_interp)
-  fbp_HFI_sf = sf::st_as_sf(fbp_HFI_stars, 
-    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-    st_transform(fbp_HFI_sf, crs=st_crs(aoi)) 
-  fbp_HFI_sf = rename(fbp_HFI_sf, HFI = var1.pred) 
-  
-  
-  fbp_RAZ_idw <- gstat::gstat(
-    formula= RAZ ~ 1, 
-    data = as(fbp_RAZ, "Spatial"),
-    set=list(idp=2.0)
-  )
-  
-  fbp_RAZ_interp <- interpolate(
-    grd_template_raster, fbp_RAZ_idw)
-  fbp_RAZ_stars = stars::st_as_stars(fbp_RAZ_interp)
-  fbp_RAZ_sf = sf::st_as_sf(fbp_RAZ_stars, 
-    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-    st_transform(fbp_RAZ_sf, crs=st_crs(aoi)) 
-  fbp_RAZ_sf = rename(fbp_RAZ_sf, RAZ = var1.pred) 
-  
-  
-  fbp_ROS_idw <- gstat::gstat(
-    formula= ROS ~ 1, 
-    data = as(fbp_ROS, "Spatial"),
-    set=list(idp=2.0)
-  )
-  
-  fbp_ROS_interp <- interpolate(
-    grd_template_raster, fbp_ROS_idw)
-  fbp_ROS_stars = stars::st_as_stars(fbp_ROS_interp)
-  fbp_ROS_sf = sf::st_as_sf(fbp_ROS_stars, 
-    as_points=FALSE, merge=FALSE, crs= "+proj=longlat") %>%
-    st_transform(fbp_ROS_sf, crs=st_crs(aoi)) 
-  fbp_ROS_sf = rename(fbp_ROS_sf, ROS = var1.pred) 
-  
-  
-  master_sf_interp = st_join(master_sf_interp, fbp_FD_sf, largest=T)
-  master_sf_interp = st_join(master_sf_interp, fbp_CFC_sf, largest=T)
-  master_sf_interp = st_join(master_sf_interp, fbp_ROS_sf, largest=T)
-  master_sf_interp = st_join(master_sf, fbp_HFI_sf, largest=T)
-  master_sf_interp = st_join(master_sf_interp, fbp_RAZ_sf, largest=T)
-  
-  master_sf_interp = master_sf_interp %>% dplyr::mutate(week_ending = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
-  master_sf_interp = master_sf_interp %>% dplyr::mutate(date = case_when(Okanagan_Watershed!="NA" ~ "20210731" ))
-  master_sf_interp$week_ending <- as.Date(as.character(master_sf_interp$week_ending), format = "%Y%m%d")
-  master_sf_interp$date <- as.Date(as.character(master_sf_interp$date), format = "%Y%m%d")
-  master_sf_interp$week_ending
-  master_sf_interp$date
-  
-  saveRDS(master_sf_interp, "./app/master_sf_interp.RDS")
-  
-  
 
 
